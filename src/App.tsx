@@ -6,6 +6,7 @@ import GameSettings from './components/GameSettings';
 import ConnectionStatus from './components/ConnectionStatus';
 import HamburgerMenu from './components/HamburgerMenu';
 import { VictoryScreen } from './components/VictoryScreen';
+import { LegStartPopup } from './components/LegStartPopup';
 import { GameSettings as GameSettingsType } from './types/game';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -13,7 +14,9 @@ function AppContent() {
   console.log('🎯 App component initializing...');
   const [viewMode, setViewMode] = useState<'settings' | 'scoreboard' | 'mobile'>('settings');
   const [loadingTimeout, setLoadingTimeout] = useState(false);
-  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings } = useSocket();
+  const [showLegStartPopup, setShowLegStartPopup] = useState(false);
+  const [lastLegNumber, setLastLegNumber] = useState(1);
+  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings, setStartingPlayer } = useSocket();
   
   console.log('📊 App state:', { gameState: !!gameState, connected, viewMode, loadingTimeout });
 
@@ -48,6 +51,16 @@ function AppContent() {
     }
   }, [gameState?.gameStarted]);
 
+  // Show popup when game is configured but not yet started
+  useEffect(() => {
+    if (gameState && !gameState.gameStarted && gameState.settings.playerNames.length > 0) {
+      // Show popup when game is configured but not started
+      if (!showLegStartPopup) {
+        setShowLegStartPopup(true);
+      }
+    }
+  }, [gameState?.gameStarted, gameState?.settings, showLegStartPopup]);
+
   const handleStartGame = (settings: GameSettingsType) => {
     startGameWithSettings(settings);
     // Auto-detect view mode after starting game
@@ -64,6 +77,11 @@ function AppContent() {
   const handleNewGame = () => {
     setViewMode('settings');
     resetGame();
+  };
+
+  const handlePlayerSelected = (playerId: number) => {
+    setStartingPlayer(playerId);
+    setShowLegStartPopup(false); // Hide the popup after selection
   };
 
   if (!gameState && !loadingTimeout) {
@@ -150,6 +168,14 @@ function AppContent() {
           onUndoLastThrow={undoLastThrow}
         />
       )}
+
+      {/* Leg Start Popup */}
+      <LegStartPopup
+        gameState={gameState}
+        isVisible={showLegStartPopup}
+        onClose={() => setShowLegStartPopup(false)}
+        onPlayerSelected={handlePlayerSelected}
+      />
     </div>
   );
 }

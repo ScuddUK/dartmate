@@ -110,6 +110,12 @@ export const useSocket = () => {
     }
   };
 
+  const setStartingPlayer = (playerId: number) => {
+    if (socket) {
+      socket.emit('setStartingPlayer', { playerId });
+    }
+  };
+
   return {
     gameState,
     connected,
@@ -118,6 +124,7 @@ export const useSocket = () => {
     resetGame,
     startGame,
     updatePlayerName,
-    startGameWithSettings
+    startGameWithSettings,
+    setStartingPlayer
   };
 };

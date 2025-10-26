@@ -5,6 +5,81 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Simple DartBot implementation for server
+class SimpleDartBot {
+  constructor(skillLevel) {
+    this.skillLevel = skillLevel;
+    this.averageScore = 20 + (skillLevel - 1) * 10; // 20-110 range
+    this.accuracy = Math.min(0.3 + (skillLevel - 1) * 0.07, 0.95); // 30% to 95%
+  }
+
+  generateThrow(targetScore = null, isFinishingAttempt = false) {
+    // Simple scoring algorithm
+    const random = Math.random();
+    
+    // Miss chance (decreases with skill)
+    const missChance = Math.max(0.05, 0.25 - (this.skillLevel - 1) * 0.02);
+    if (random < missChance) {
+      return 0;
+    }
+
+    // If trying to finish with a double
+    if (isFinishingAttempt && targetScore && targetScore <= 40 && targetScore % 2 === 0) {
+      const doubleAccuracy = Math.min(0.1 + (this.skillLevel - 1) * 0.05, 0.6);
+      if (Math.random() < doubleAccuracy) {
+        return targetScore; // Hit the double to finish
+      }
+    }
+
+    // Generate a score based on skill level
+    const baseScore = Math.floor(Math.random() * 60) + 1; // 1-60
+    const skillBonus = Math.floor(Math.random() * (this.skillLevel * 10)); // 0 to skillLevel*10
+    const totalScore = Math.min(baseScore + skillBonus, 180);
+    
+    // Ensure we don't go below 0 or create impossible finishes
+    if (targetScore && totalScore > targetScore) {
+      return Math.floor(Math.random() * Math.min(targetScore, 60)) + 1;
+    }
+    
+    return totalScore;
+  }
+
+  generateTurn(currentScore) {
+    const throws = [];
+    let remainingScore = currentScore;
+    const numThrows = Math.floor(Math.random() * 3) + 1; // 1-3 throws
+
+    for (let i = 0; i < numThrows; i++) {
+      const isFinishingAttempt = remainingScore <= 170 && remainingScore > 1;
+      const throwScore = this.generateThrow(remainingScore, isFinishingAttempt);
+      
+      // Check for bust conditions
+      if (remainingScore - throwScore < 0 || 
+          (remainingScore - throwScore === 1) ||
+          (remainingScore - throwScore === 0 && remainingScore > 50)) {
+        // Bust or invalid finish - stop throwing
+        break;
+      }
+
+      throws.push({
+        score: throwScore,
+        timestamp: Date.now() + i
+      });
+
+      remainingScore -= throwScore;
+
+      // Game finished
+      if (remainingScore === 0) {
+        break;
+      }
+    }
+
+    // Calculate total score for this turn
+    const totalTurnScore = throws.reduce((sum, throw_) => sum + throw_.score, 0);
+    return totalTurnScore;
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -22,7 +97,7 @@ app.use(express.json());
 
 // Serve static files in production (check multiple ways to detect production)
 const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
-const isProduction = nodeEnv === 'production' || process.env.RENDER || nodeEnv === '';
+const isProduction = nodeEnv === 'production' || process.env.RENDER;
 
 console.log('🔍 Production detection:');
 console.log('  NODE_ENV raw:', JSON.stringify(process.env.NODE_ENV));
@@ -46,8 +121,8 @@ if (isProduction) {
 // Game state
 let gameState = {
   players: [
-    { id: 1, name: 'Player 1', score: 501, legsWon: 0, setsWon: 0, throws: [], averageScore: 0 },
-    { id: 2, name: 'Player 2', score: 501, legsWon: 0, setsWon: 0, throws: [], averageScore: 0 }
+    { id: 1, name: 'Player 1', score: 501, legsWon: 0, setsWon: 0, throws: [], averageScore: 0, isBot: false },
+    { id: 2, name: 'Player 2', score: 501, legsWon: 0, setsWon: 0, throws: [], averageScore: 0, isBot: false }
   ],
   currentPlayer: 1,
   gameMode: '501',
@@ -59,10 +134,23 @@ let gameState = {
     legsToWin: 3,
     setsEnabled: false,
     setsToWin: 3,
-    playerNames: ['Player 1', 'Player 2']
+    playerNames: ['Player 1', 'Player 2'],
+    dartBot: {
+      enabled: false,
+      skillLevel: 5,
+      averageScore: 65,
+      name: 'DartBot'
+    }
   },
   currentLeg: 1,
-  currentSet: 1
+  currentSet: 1,
+  legStartingPlayer: 1 // Tracks who should start each leg (alternates)
+};
+
+// DartBot instances
+let dartBotInstances = {
+  1: null,
+  2: null
 };
 
 // Socket.IO connection handling
@@ -94,12 +182,17 @@ io.on('connection', (socket) => {
     gameState.players[1].throws = [];
     gameState.players[0].averageScore = 0;
     gameState.players[1].averageScore = 0;
+    gameState.players[0].isBot = false;
+    gameState.players[1].isBot = settings.dartBot?.enabled || false;
+    gameState.players[0].botSkillLevel = undefined;
+    gameState.players[1].botSkillLevel = settings.dartBot?.enabled ? settings.dartBot.skillLevel : undefined;
     gameState.currentPlayer = 1;
     gameState.gameMode = settings.startingScore.toString();
-    gameState.gameStarted = true;
+    gameState.gameStarted = true; // Start the game
     gameState.throwHistory = [];
     gameState.currentLeg = 1;
     gameState.currentSet = 1;
+    gameState.legStartingPlayer = 1; // Default, but will be overridden by player selection
     
     io.emit('gameState', gameState);
   });
@@ -112,6 +205,34 @@ io.on('connection', (socket) => {
       player.name = name;
       gameState.settings.playerNames[playerId - 1] = name;
       io.emit('gameState', gameState);
+    }
+  });
+
+  // Handle manual starting player selection and start the game
+  socket.on('setStartingPlayer', (data) => {
+    const { playerId } = data;
+    if (playerId === 1 || playerId === 2) {
+      gameState.currentPlayer = playerId;
+      gameState.legStartingPlayer = playerId;
+      gameState.gameStarted = true; // Now start the game
+      
+      // Initialize DartBot if enabled (now that the game is starting)
+      if (gameState.settings.dartBot?.enabled) {
+        dartBotInstances[2] = new SimpleDartBot(gameState.settings.dartBot.skillLevel);
+        console.log(`DartBot initialized with skill level ${gameState.settings.dartBot.skillLevel}`);
+      } else {
+        dartBotInstances[2] = null;
+      }
+      
+      console.log(`🎯 Starting player manually set to: Player ${playerId} and starting the game`);
+      io.emit('gameState', gameState);
+      
+      // If DartBot is the starting player and it's their turn, make them throw immediately
+      if (gameState.currentPlayer === 1 && gameState.players[0].isBot) {
+        setTimeout(() => makeBotThrow(1), 1000);
+      } else if (gameState.currentPlayer === 2 && gameState.players[1].isBot) {
+        setTimeout(() => makeBotThrow(2), 1000);
+      }
     }
   });
   
@@ -158,6 +279,12 @@ io.on('connection', (socket) => {
         
         // Broadcast updated state
         io.emit('gameState', gameState);
+        
+        // If next player is a bot, make them throw
+        const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+        if (nextPlayer && nextPlayer.isBot) {
+          setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+        }
         return;
       }
       
@@ -216,6 +343,12 @@ io.on('connection', (socket) => {
               // Set won but match continues - reset for new set
               resetLeg();
               io.emit('gameState', gameState);
+              
+              // Check if the new starting player is a bot and make them throw
+              const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+              if (newStartingPlayer && newStartingPlayer.isBot) {
+                setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+              }
               return;
             }
           }
@@ -236,6 +369,12 @@ io.on('connection', (socket) => {
         resetLeg();
         // Broadcast updated state after leg reset
         io.emit('gameState', gameState);
+        
+        // Check if the new starting player is a bot and make them throw
+        const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+        if (newStartingPlayer && newStartingPlayer.isBot) {
+          setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+        }
         return;
       }
       
@@ -250,6 +389,12 @@ io.on('connection', (socket) => {
       
       // Broadcast updated state
       io.emit('gameState', gameState);
+      
+      // If next player is a bot, make them throw
+      const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+      if (nextPlayer && nextPlayer.isBot) {
+        setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+      }
     }
   });
   
@@ -314,7 +459,10 @@ function resetLeg() {
     player.score = gameState.settings.startingScore;
     player.throws = [];
   });
-  gameState.currentPlayer = 1;
+  
+  // Alternate the starting player for each leg
+  gameState.legStartingPlayer = gameState.legStartingPlayer === 1 ? 2 : 1;
+  gameState.currentPlayer = gameState.legStartingPlayer;
   gameState.currentLeg++;
   gameState.throwHistory = [];
 }
@@ -334,6 +482,178 @@ function updatePlayerAverage(player) {
   
   const totalScore = validThrows.reduce((sum, throw_) => sum + throw_.score, 0);
   player.averageScore = Math.round((totalScore / validThrows.length) * 100) / 100;
+}
+
+function makeBotThrow(playerId) {
+  const player = gameState.players.find(p => p.id === playerId);
+  const botInstance = dartBotInstances[playerId];
+  
+  if (!player || !player.isBot || !botInstance || gameState.currentPlayer !== playerId) {
+    return;
+  }
+  
+  console.log(`DartBot (Player ${playerId}) is throwing...`);
+  
+  // Generate bot turn score
+  const turnScore = botInstance.generateTurn(player.score);
+  
+  // Simulate the throw with a delay for realism
+  setTimeout(() => {
+    // Check if this would be a bust before recording anything
+    const newScore = player.score - turnScore;
+    
+    if (newScore < 0 || newScore === 1) {
+      // Bust - don't record the throw, just emit bust event
+      io.emit('bust', { playerId });
+      
+      // Record a bust in the throw history for display purposes
+      const bustRecord = {
+        score: 'bust',
+        timestamp: new Date(),
+        remainingScore: player.score, // Score remains unchanged
+        playerId: playerId,
+        previousScore: player.score
+      };
+      
+      // Add bust record to player's throw history
+      player.throws.push(bustRecord);
+      
+      // Add to global throw history for proper undo functionality
+      gameState.throwHistory.push(bustRecord);
+      
+      // Keep only last 10 throws per player
+      if (player.throws.length > 10) {
+        player.throws = player.throws.slice(-10);
+      }
+      
+      // Keep only last 50 throws in global history
+      if (gameState.throwHistory.length > 50) {
+        gameState.throwHistory = gameState.throwHistory.slice(-50);
+      }
+      
+      // Move to next player
+      gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+      
+      // Broadcast updated state
+      io.emit('gameState', gameState);
+      
+      // If next player is also a bot, make them throw
+      const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+      if (nextPlayer && nextPlayer.isBot) {
+        setTimeout(() => makeBotThrow(gameState.currentPlayer), 2000);
+      }
+      
+      return;
+    }
+    
+    // Valid throw - record it
+    const throwRecord = {
+      score: turnScore,
+      timestamp: new Date(),
+      remainingScore: newScore,
+      playerId: playerId,
+      previousScore: player.score
+    };
+    
+    // Add to player's throw history
+    player.throws.push(throwRecord);
+    
+    // Add to global throw history for proper undo functionality
+    gameState.throwHistory.push(throwRecord);
+    
+    // Keep only last 10 throws per player
+    if (player.throws.length > 10) {
+      player.throws = player.throws.slice(-10);
+    }
+    
+    // Keep only last 50 throws in global history
+    if (gameState.throwHistory.length > 50) {
+      gameState.throwHistory = gameState.throwHistory.slice(-50);
+    }
+    
+    if (newScore === 0) {
+      // Player wins the leg
+      player.legsWon++;
+      
+      // Check if player wins the set (if sets are enabled)
+      if (gameState.settings.setsEnabled) {
+        const legsNeeded = gameState.settings.gameFormat === 'bestOf' 
+          ? Math.ceil(gameState.settings.legsToWin / 2) 
+          : gameState.settings.legsToWin;
+          
+        if (player.legsWon >= legsNeeded) {
+          player.setsWon++;
+          // Reset legs for new set
+          gameState.players.forEach(p => p.legsWon = 0);
+          gameState.currentSet++;
+          
+          // Check if player wins the match
+          const setsNeeded = gameState.settings.gameFormat === 'bestOf' 
+            ? Math.ceil(gameState.settings.setsToWin / 2) 
+            : gameState.settings.setsToWin;
+            
+          if (player.setsWon >= setsNeeded) {
+            // Game over - player wins
+            resetLeg(); // Reset scores for display purposes
+            io.emit('gameWon', { winner: player });
+            return;
+          } else {
+            // Set won but match continues - reset for new set
+            resetLeg();
+            io.emit('gameState', gameState);
+            
+            // Check if the new starting player is a bot and make them throw
+            const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+            if (newStartingPlayer && newStartingPlayer.isBot) {
+              setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+            }
+            return;
+          }
+        }
+      } else {
+        // No sets - check if player wins the match based on legs
+        const legsNeeded = gameState.settings.gameFormat === 'bestOf' 
+          ? Math.ceil(gameState.settings.legsToWin / 2) 
+          : gameState.settings.legsToWin;
+          
+        if (player.legsWon >= legsNeeded) {
+          // Game over - player wins
+          resetLeg(); // Reset scores for display purposes
+          io.emit('gameWon', { winner: player });
+          return;
+        }
+      }
+      
+      resetLeg();
+      // Broadcast updated state after leg reset
+      io.emit('gameState', gameState);
+      
+      // Check if the new starting player is a bot and make them throw
+      const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+      if (newStartingPlayer && newStartingPlayer.isBot) {
+        setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+      }
+      return;
+    }
+    
+    // Update score (only for valid, non-bust throws)
+    player.score = newScore;
+    
+    // Calculate average
+    updatePlayerAverage(player);
+    
+    // Move to next player
+    gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+    
+    // Broadcast updated state
+    io.emit('gameState', gameState);
+    
+    // If next player is a bot, make them throw
+    const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+    if (nextPlayer && nextPlayer.isBot) {
+      setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+    }
+  }, 1500); // 1.5 second delay to simulate thinking/throwing time
 }
 
 const PORT = process.env.PORT || 3001;

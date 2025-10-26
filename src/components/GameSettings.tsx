@@ -14,8 +14,16 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
     legsToWin: 3,
     setsEnabled: false,
     setsToWin: 3,
-    playerNames: ['Player 1', 'Player 2']
+    playerNames: ['Player 1', 'Player 2'],
+    dartBot: {
+      enabled: false,
+      skillLevel: 5,
+      averageScore: 65, // Middle skill level
+      name: 'DartBot'
+    }
   });
+
+
 
   const handlePlayerNameChange = (index: 0 | 1, name: string) => {
     const newNames = [...settings.playerNames] as [string, string];
@@ -23,9 +31,45 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
     setSettings({ ...settings, playerNames: newNames });
   };
 
+  // Calculate DartBot average score based on skill level (1-10 = 20-110 average)
+  const calculateBotAverageScore = (skillLevel: number): number => {
+    return 20 + (skillLevel - 1) * 10;
+  };
+
+  const handleDartBotToggle = (enabled: boolean) => {
+    setSettings({
+      ...settings,
+      dartBot: {
+        ...settings.dartBot,
+        enabled,
+        averageScore: calculateBotAverageScore(settings.dartBot.skillLevel)
+      }
+    });
+  };
+
+  const handleDartBotSkillChange = (skillLevel: number) => {
+    setSettings({
+      ...settings,
+      dartBot: {
+        ...settings.dartBot,
+        skillLevel,
+        averageScore: calculateBotAverageScore(skillLevel),
+        name: `DartBot (Level ${skillLevel})`
+      }
+    });
+  };
+
   const handleStartGame = () => {
-    if (settings.playerNames[0].trim() && settings.playerNames[1].trim()) {
-      onStartGame(settings);
+    const player1Valid = settings.playerNames[0].trim();
+    const player2Valid = settings.dartBot.enabled || settings.playerNames[1].trim();
+    
+    if (player1Valid && player2Valid) {
+      // If DartBot is enabled, update player 2 name to DartBot name
+      const finalSettings = settings.dartBot.enabled 
+        ? { ...settings, playerNames: [settings.playerNames[0], settings.dartBot.name] as [string, string] }
+        : settings;
+      
+      onStartGame(finalSettings);
     }
   };
 
@@ -55,14 +99,67 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Player 2</label>
-                <input
-                  type="text"
-                  value={settings.playerNames[1]}
-                  onChange={(e) => handlePlayerNameChange(1, e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-dart-gold focus:border-transparent"
-                  placeholder="Enter player 2 name"
-                />
+                {!settings.dartBot.enabled ? (
+                  <input
+                     type="text"
+                     value={settings.playerNames[1]}
+                     onChange={(e) => handlePlayerNameChange(1, e.target.value)}
+                     className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                     placeholder="Enter player 2 name"
+                   />
+                ) : (
+                  <div className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg border border-gray-500 flex items-center">
+                    <span className="text-blue-400 mr-2">🤖</span>
+                    <span>{settings.dartBot.name}</span>
+                    <span className="ml-auto text-sm text-gray-300">
+                      Avg: {settings.dartBot.averageScore}
+                    </span>
+                  </div>
+                )}
               </div>
+            </div>
+            
+            {/* DartBot Controls */}
+            <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-600">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">🤖 DartBot</h3>
+                  <p className="text-sm text-gray-400">Play against an AI opponent</p>
+                </div>
+                <button
+                  onClick={() => handleDartBotToggle(!settings.dartBot.enabled)}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                    settings.dartBot.enabled ? '' : 'bg-gray-600'
+                  }`}
+                  style={settings.dartBot.enabled ? { backgroundColor: 'var(--color-primary)' } : {}}
+                >
+                  <span
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                      settings.dartBot.enabled ? 'translate-x-7' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              
+              {settings.dartBot.enabled && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Skill Level (Avg Score: {settings.dartBot.averageScore})
+                  </label>
+                  <select
+                    value={settings.dartBot.skillLevel}
+                    onChange={(e) => handleDartBotSkillChange(Number(e.target.value))}
+                    className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  >
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((level) => (
+                      <option key={level} value={level}>
+                        Level {level} - {level <= 3 ? 'Beginner 🟢' : level <= 6 ? 'Intermediate 🟡' : level <= 8 ? 'Advanced 🟠' : 'Expert 🔴'} 
+                        (Avg: {calculateBotAverageScore(level)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -234,7 +331,7 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
           <div className="pt-6">
             <button
               onClick={handleStartGame}
-              disabled={!settings.playerNames[0].trim() || !settings.playerNames[1].trim()}
+              disabled={!settings.playerNames[0].trim() || (!settings.dartBot.enabled && !settings.playerNames[1].trim())}
               className="w-full py-4 px-6 text-white font-bold text-xl rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               style={{ backgroundColor: 'var(--color-primary)' }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-secondary)'}
