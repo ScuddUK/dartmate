@@ -33,6 +33,17 @@ const MobileInput: React.FC<MobileInputProps> = ({
     setInputScore('');
   };
 
+  // Context-sensitive button handler
+  const handleContextButton = () => {
+    if (inputScore === '') {
+      // If no score entered, act as Undo button
+      onUndoLastThrow();
+    } else {
+      // If score entered, act as Cancel button
+      handleCancel();
+    }
+  };
+
   const handleSubmit = () => {
     const score = parseInt(inputScore);
     if (score >= 0 && score <= 180 && inputScore !== '' && currentPlayer) {
@@ -45,6 +56,25 @@ const MobileInput: React.FC<MobileInputProps> = ({
     const score = parseInt(inputScore);
     return inputScore !== '' && score >= 0 && score <= 180;
   };
+
+  // Determine button appearance and text based on input state
+  const getContextButtonProps = () => {
+    if (inputScore === '') {
+      return {
+        text: '↶',
+        bgColor: 'bg-gray-600',
+        disabled: !gameState.gameStarted
+      };
+    } else {
+      return {
+        text: 'C',
+        bgColor: 'bg-red-600',
+        disabled: false
+      };
+    }
+  };
+
+  const contextButtonProps = getContextButtonProps();
 
   return (
     <div className="min-h-screen bg-dart-dark text-white flex flex-col">
@@ -73,54 +103,41 @@ const MobileInput: React.FC<MobileInputProps> = ({
         </div>
       </div>
 
-      {/* Number Pad - Optimized for Touch (48x48px buttons, rounded corners) */}
+      {/* Number Pad - Dynamically Scaled for Touch */}
       <div className="flex-1 flex flex-col justify-center px-4 pb-4">
-        <div className="grid grid-cols-3 max-w-[144px] mx-auto mb-0">
+        {/* Calculate dynamic button size based on screen width */}
+        <div className="grid grid-cols-3 gap-2 w-full max-w-sm mx-auto">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleNumberInput(num.toString())}
-              className="w-12 h-12 bg-dart-gold text-dart-dark text-xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg"
+              className="aspect-square bg-dart-gold text-dart-dark text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
             >
               {num}
             </button>
           ))}
           
-          {/* Bottom row: Cancel, 0, Submit */}
+          {/* Bottom row: Context-sensitive Cancel/Undo, 0, Submit */}
           <button
-            onClick={handleCancel}
-            className="w-12 h-12 bg-red-600 text-white text-xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg"
+            onClick={handleContextButton}
+            disabled={contextButtonProps.disabled}
+            className={`aspect-square ${contextButtonProps.bgColor} text-white text-2xl font-bold active:scale-95 transition-all duration-200 border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            C
+            {contextButtonProps.text}
           </button>
           <button
             onClick={() => handleNumberInput('0')}
-            className="w-12 h-12 bg-dart-gold text-dart-dark text-xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg"
+            className="aspect-square bg-dart-gold text-dart-dark text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
           >
             0
           </button>
           <button
             onClick={handleSubmit}
             disabled={!isValidScore() || !gameState.gameStarted}
-            className="w-12 h-12 bg-green-600 text-white text-lg font-bold active:scale-95 transition-transform border border-dart-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
+            className="aspect-square bg-green-600 text-white text-xl font-bold active:scale-95 transition-transform border border-dart-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
           >
             ✓
           </button>
-        </div>
-
-        {/* Undo Button - Single button under 0 */}
-        <div className="max-w-[144px] mx-auto">
-          <div className="grid grid-cols-3">
-            <div></div> {/* Empty space */}
-            <button
-              onClick={onUndoLastThrow}
-              disabled={!gameState.gameStarted}
-              className="w-12 h-12 bg-gray-600 text-white text-lg font-bold active:scale-95 transition-transform border border-dart-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
-            >
-              ↶
-            </button>
-            <div></div> {/* Empty space */}
-          </div>
         </div>
 
         {/* Score Validation */}
@@ -128,23 +145,6 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <div className="text-center mt-4">
             <div className="bg-red-600 text-white px-3 py-1 rounded text-sm">
               ⚠️ Score must be 0-180
-            </div>
-          </div>
-        )}
-
-        {/* Recent Throws - Compact */}
-        {currentPlayer && currentPlayer.throws.length > 0 && (
-          <div className="mt-4 text-center">
-            <h3 className="text-sm font-semibold mb-2">Recent:</h3>
-            <div className="flex justify-center gap-1 flex-wrap">
-              {currentPlayer.throws.slice(-5).map((throwRecord, index) => (
-                <span
-                  key={index}
-                  className="bg-gray-700 px-2 py-1 rounded text-xs text-dart-gold font-mono"
-                >
-                  {throwRecord.score}
-                </span>
-              ))}
             </div>
           </div>
         )}
