@@ -20,14 +20,27 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
+// Serve static files in production (check multiple ways to detect production)
+const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
+const isProduction = nodeEnv === 'production' || process.env.RENDER || nodeEnv === '';
+
+console.log('🔍 Production detection:');
+console.log('  NODE_ENV raw:', JSON.stringify(process.env.NODE_ENV));
+console.log('  NODE_ENV trimmed:', JSON.stringify(nodeEnv));
+console.log('  RENDER exists:', !!process.env.RENDER);
+console.log('  isProduction:', isProduction);
+
+if (isProduction) {
+  console.log('🚀 Serving static files from dist directory');
   app.use(express.static(path.join(__dirname, '../dist')));
   
   // Handle React Router - serve index.html for all non-API routes
   app.get('*', (req, res) => {
+    console.log('📄 Serving index.html for route:', req.path);
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
+} else {
+  console.log('🔧 Development mode - not serving static files');
 }
 
 // Game state
@@ -239,6 +252,18 @@ function updatePlayerAverage(player) {
 }
 
 const PORT = process.env.PORT || 3001;
+
+// Log environment information for debugging
+console.log('🌍 Environment Information:');
+console.log('  NODE_ENV:', process.env.NODE_ENV || 'undefined');
+console.log('  RENDER:', process.env.RENDER || 'undefined');
+console.log('  PORT:', PORT);
+console.log('  __dirname:', __dirname);
+console.log('  dist path:', path.join(__dirname, '../dist'));
+
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📱 Access the app at: http://localhost:${PORT}`);
+}).on('error', (err) => {
+  console.error('❌ Server failed to start:', err);
 });

@@ -7,9 +7,12 @@ import ConnectionStatus from './components/ConnectionStatus';
 import { GameSettings as GameSettingsType } from './types/game';
 
 function App() {
+  console.log('🎯 App component initializing...');
   const [viewMode, setViewMode] = useState<'settings' | 'scoreboard' | 'mobile'>('settings');
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings } = useSocket();
+  
+  console.log('📊 App state:', { gameState: !!gameState, connected, viewMode, loadingTimeout });
 
   // Add a timeout for loading state to prevent infinite loading
   useEffect(() => {
