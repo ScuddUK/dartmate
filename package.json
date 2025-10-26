@@ -1,6 +1,6 @@
 {
   "name": "dart-scorer",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "description": "Professional dart scoring application with TV scoreboard and mobile input",
   "type": "module",
   "scripts": {

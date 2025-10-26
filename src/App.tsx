@@ -4,6 +4,7 @@ import Scoreboard from './components/Scoreboard';
 import MobileInput from './components/MobileInput';
 import GameSettings from './components/GameSettings';
 import ConnectionStatus from './components/ConnectionStatus';
+import HamburgerMenu from './components/HamburgerMenu';
 import { GameSettings as GameSettingsType } from './types/game';
 
 function App() {
@@ -113,41 +114,8 @@ function App() {
     <div className="min-h-screen bg-dart-dark">
       <ConnectionStatus connected={connected} />
       
-      {/* View Mode Toggle */}
-      <div className="fixed top-4 right-4 z-50">
-        <div className="bg-gray-800 rounded-lg p-2 flex gap-2">
-          <button
-            onClick={() => setViewMode('scoreboard')}
-            className={`px-4 py-2 rounded ${
-              viewMode === 'scoreboard' 
-                ? 'bg-dart-gold text-dart-dark' 
-                : 'bg-gray-600 text-white hover:bg-gray-500'
-            }`}
-          >
-            📺 Scoreboard
-          </button>
-          <button
-            onClick={() => setViewMode('mobile')}
-            className={`px-4 py-2 rounded ${
-              viewMode === 'mobile' 
-                ? 'bg-dart-gold text-dart-dark' 
-                : 'bg-gray-600 text-white hover:bg-gray-500'
-            }`}
-          >
-            📱 Mobile
-          </button>
-          <button
-            onClick={() => setViewMode('settings')}
-            className={`px-4 py-2 rounded ${
-              viewMode === 'settings' 
-                ? 'bg-dart-gold text-dart-dark' 
-                : 'bg-gray-600 text-white hover:bg-gray-500'
-            }`}
-          >
-            ⚙️ Settings
-          </button>
-        </div>
-      </div>
+      {/* Hamburger Menu */}
+      <HamburgerMenu viewMode={viewMode} onViewModeChange={setViewMode} />
 
       {viewMode === 'settings' ? (
         <GameSettings onStartGame={handleStartGame} />

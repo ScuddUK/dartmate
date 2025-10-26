@@ -19,15 +19,17 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
       const isHighScore = throwRecord.score >= 100;
       
       return (
-        <div key={i} className="mb-2 text-center">
-          <div className="text-3xl lg:text-5xl xl:text-6xl font-bold flex items-center justify-center gap-3 lg:gap-4">
-            <span className={`min-w-[60px] lg:min-w-[80px] ${isHighScore ? 'text-green-400' : 'text-dart-gold'}`}>
-              {throwRecord.score}
-            </span>
-            <span className="text-dart-gold text-3xl lg:text-5xl xl:text-6xl">•</span>
-            <span className="text-gray-300 flex items-center gap-2 lg:gap-3 text-3xl lg:text-5xl xl:text-6xl">
+        <div key={i} className="mb-4 text-center">
+          <div className="text-3xl lg:text-5xl xl:text-6xl font-bold flex items-center justify-center gap-6 lg:gap-7">
+            <div className="flex items-center gap-1">
+              <span className={`min-w-[60px] lg:min-w-[80px] ${isHighScore ? 'text-green-400' : 'text-dart-gold'}`}>
+                {throwRecord.score}
+              </span>
+              <span className="text-dart-gold text-3xl lg:text-5xl xl:text-6xl">•</span>
+            </div>
+            <span className="text-gray-300 flex items-center gap-4 lg:gap-5 text-3xl lg:text-5xl xl:text-6xl">
               <span className="line-through opacity-60 min-w-[60px] lg:min-w-[80px]">{previousTotal}</span>
-              <span className="mx-1 text-dart-gold">→</span>
+              <span className="mx-2 text-dart-gold">→</span>
               <span className="font-bold text-white min-w-[60px] lg:min-w-[80px] text-4xl lg:text-6xl xl:text-7xl">{newTotal}</span>
             </span>
           </div>
@@ -41,11 +43,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
       {/* Header */}
       <div className="text-center mb-6">
         <h1 className="text-4xl lg:text-6xl font-bold text-dart-gold mb-4">🎯 DART SCORER PRO</h1>
-        <div className="text-xl lg:text-2xl text-gray-300 mb-2">
-          Game Mode: <span className="text-dart-gold">{gameState.gameMode}</span>
-        </div>
         {gameState.settings && (
-          <div className="text-base lg:text-lg text-gray-400">
+          <div className="text-xl lg:text-2xl text-gray-400">
             {gameState.settings.setsEnabled ? (
               <div>
                 Set {gameState.currentSet || 1} • Leg {gameState.currentLeg || 1} • 
@@ -63,25 +62,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
         )}
       </div>
 
-      {/* Game Controls */}
-      <div className="flex justify-center gap-4 mb-6">
-        <button
-          onClick={onStartGame}
-          className="btn-primary text-lg lg:text-xl px-6 lg:px-8 py-3 lg:py-4"
-          disabled={gameState.gameStarted}
-        >
-          {gameState.gameStarted ? '🎮 Game In Progress' : '🚀 Start Game'}
-        </button>
-        <button
-          onClick={onResetGame}
-          className="btn-secondary text-lg lg:text-xl px-6 lg:px-8 py-3 lg:py-4"
-        >
-          🔄 Reset Game
-        </button>
-      </div>
-
       {/* Players Grid - Dynamic scaling based on screen size */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8 h-[calc(100vh-300px)] max-w-full mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8 h-[calc(100vh-200px)] max-w-full mx-auto">
         {gameState.players.map((player) => (
           <div
             key={player.id}
