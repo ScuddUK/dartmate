@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameState } from '../types/game';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ScoreboardProps {
   gameState: GameState;
@@ -12,6 +13,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
   onResetGame, 
   onStartGame
 }) => {
+  const { currentTheme } = useTheme();
   const [isLandscape, setIsLandscape] = useState(false);
 
   useEffect(() => {
@@ -47,19 +49,28 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
             isLandscape ? 'text-sm gap-1' : 'text-3xl lg:text-5xl xl:text-6xl gap-6 lg:gap-7'
           }`}>
             <div className="flex items-center gap-1">
-              <span className={`${isLandscape ? 'min-w-[30px]' : 'min-w-[60px] lg:min-w-[80px]'} ${
-                isBust ? 'text-red-400' : isHighScore ? 'text-green-400' : 'text-dart-gold'
-              }`}>
+              <span 
+                className={`font-score ${isLandscape ? 'min-w-[30px]' : 'min-w-[60px] lg:min-w-[80px]'}`}
+                style={{ 
+                  color: isBust ? 'var(--color-error)' : isHighScore ? 'var(--color-accent)' : 'var(--color-primary)' 
+                }}
+              >
                 {throwRecord.score}
               </span>
-              <span className={`text-dart-gold ${isLandscape ? 'text-sm' : 'text-3xl lg:text-5xl xl:text-6xl'}`}>•</span>
+              <span 
+                className={`${isLandscape ? 'text-sm' : 'text-3xl lg:text-5xl xl:text-6xl'}`}
+                style={{ color: 'var(--color-primary)' }}
+              >•</span>
             </div>
             <span className={`text-gray-300 flex items-center ${
               isLandscape ? 'gap-1 text-sm' : 'gap-4 lg:gap-5 text-3xl lg:text-5xl xl:text-6xl'
             }`}>
-              <span className={`line-through opacity-60 ${isLandscape ? 'min-w-[30px]' : 'min-w-[60px] lg:min-w-[80px]'}`}>{previousTotal}</span>
-              <span className={`text-dart-gold ${isLandscape ? 'mx-1' : 'mx-2'}`}>→</span>
-              <span className={`font-bold text-white ${
+              <span className={`font-score line-through opacity-60 ${isLandscape ? 'min-w-[30px]' : 'min-w-[60px] lg:min-w-[80px]'}`}>{previousTotal}</span>
+              <span 
+                className={`${isLandscape ? 'mx-1' : 'mx-2'}`}
+                style={{ color: 'var(--color-primary)' }}
+              >→</span>
+              <span className={`font-score font-bold text-white ${
                 isLandscape ? 'min-w-[30px] text-sm' : 'min-w-[60px] lg:min-w-[80px] text-4xl lg:text-6xl xl:text-7xl'
               }`}>{newTotal}</span>
             </span>
@@ -103,24 +114,33 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
               isLandscape ? 'p-2' : 'p-4 lg:p-8'
             } ${
               gameState.currentPlayer === player.id
-                ? 'border-dart-gold bg-dart-gold bg-opacity-10 shadow-lg shadow-dart-gold/30'
+                ? 'bg-opacity-10 shadow-lg'
                 : 'border-gray-600 bg-gray-800 bg-opacity-50'
             }`}
+            style={gameState.currentPlayer === player.id ? {
+              borderColor: 'var(--color-primary)',
+              backgroundColor: 'var(--color-primary-alpha)',
+              boxShadow: `0 10px 15px -3px var(--color-primary-alpha), 0 4px 6px -2px var(--color-primary-alpha)`
+            } : {}}
           >
             {/* Player Name - No editing functionality */}
             <div className={`text-center ${isLandscape ? 'mb-2' : 'mb-4 lg:mb-6'}`}>
-              <h2 className={`font-bold text-dart-gold ${
+              <h2 className={`font-bold ${
                 isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
-              }`}>
+              }`}
+              style={{ color: 'var(--color-primary)' }}>
                 {player.name}
               </h2>
             </div>
 
             {/* Current Score */}
             <div className={`text-center ${isLandscape ? 'mb-3' : 'mb-6 lg:mb-8'}`}>
-              <div className={`font-bold text-dart-gold ${
-                isLandscape ? 'text-4xl mb-1' : 'text-6xl lg:text-8xl xl:text-9xl mb-2'
-              }`}>
+              <div 
+                className={`font-main-score font-bold ${
+                  isLandscape ? 'text-4xl mb-1' : 'text-6xl lg:text-8xl xl:text-9xl mb-2'
+                }`}
+                style={{ color: 'var(--color-primary)' }}
+              >
                 {player.score}
               </div>
               <div className={`text-gray-300 ${
@@ -136,18 +156,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
             }`}>
               {gameState.settings?.setsEnabled && (
                 <div className="text-center">
-                  <div className={`font-bold text-purple-400 ${
-                    isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
-                  }`}>
-                    {player.setsWon || 0}
-                  </div>
+                  <div className={`font-score font-bold text-purple-400 ${
+                  isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
+                }`}>
+                  {player.setsWon || 0}
+                </div>
                   <div className={`text-gray-400 ${
                     isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
                   }`}>Sets Won</div>
                 </div>
               )}
               <div className="text-center">
-                <div className={`font-bold text-green-400 ${
+                <div className={`font-score font-bold text-green-400 ${
                   isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
                 }`}>
                   {player.legsWon}
@@ -157,7 +177,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
                 }`}>Legs Won</div>
               </div>
               <div className="text-center">
-                <div className={`font-bold text-blue-400 ${
+                <div className={`font-score font-bold text-blue-400 ${
                   isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
                 }`}>
                   {player.averageScore.toFixed(1)}

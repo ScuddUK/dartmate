@@ -41,7 +41,7 @@ class ErrorBoundary extends Component<Props, State> {
             </button>
             {this.state.error && (
               <details className="mt-4 text-left">
-                <summary className="cursor-pointer text-dart-gold">
+                <summary className="cursor-pointer" style={{ color: 'var(--color-primary)' }}>
                   Technical Details
                 </summary>
                 <pre className="mt-2 text-xs bg-gray-800 p-2 rounded overflow-auto">

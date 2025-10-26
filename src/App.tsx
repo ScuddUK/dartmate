@@ -7,8 +7,9 @@ import ConnectionStatus from './components/ConnectionStatus';
 import HamburgerMenu from './components/HamburgerMenu';
 import { VictoryScreen } from './components/VictoryScreen';
 import { GameSettings as GameSettingsType } from './types/game';
+import { ThemeProvider } from './contexts/ThemeContext';
 
-function App() {
+function AppContent() {
   console.log('🎯 App component initializing...');
   const [viewMode, setViewMode] = useState<'settings' | 'scoreboard' | 'mobile'>('settings');
   const [loadingTimeout, setLoadingTimeout] = useState(false);
@@ -150,6 +151,14 @@ function App() {
         />
       )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 

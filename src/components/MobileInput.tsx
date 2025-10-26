@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameState } from '../types/game';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface MobileInputProps {
   gameState: GameState;
@@ -12,6 +13,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
   onSubmitScore, 
   onUndoLastThrow 
 }) => {
+  const { currentTheme } = useTheme();
   const [inputScore, setInputScore] = useState('');
 
   // Always use the current player from game state for automatic alternation
@@ -68,7 +70,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
     } else {
       return {
         text: 'C',
-        bgColor: 'bg-red-600',
+        bgColor: 'var(--color-error)',
         disabled: false
       };
     }
@@ -81,7 +83,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
       {/* Game Status */}
       {!gameState.gameStarted && (
         <div className="text-center py-4 flex-shrink-0">
-          <div className="bg-yellow-600 text-yellow-100 px-4 py-2 rounded-lg mt-2 mx-4">
+          <div className="text-yellow-100 px-4 py-2 rounded-lg mt-2 mx-4" style={{ backgroundColor: 'var(--color-warning)' }}>
             ⚠️ Game not started yet. Switch to Scoreboard view to start.
           </div>
         </div>
@@ -90,14 +92,14 @@ const MobileInput: React.FC<MobileInputProps> = ({
       {/* Current Player Display - Compact */}
       <div className="text-center py-4 flex-shrink-0">
         <div className="dart-display p-4 rounded-xl mx-4">
-          <div className="text-3xl font-bold text-dart-gold mb-2">
+          <div className="text-3xl font-bold mb-2" style={{ color: 'var(--color-primary)' }}>
             {currentPlayer?.name}
           </div>
-          <div className="text-5xl font-bold mb-2 text-white">
+          <div className="font-score text-5xl font-bold mb-2 text-white">
             {inputScore || '0'}
           </div>
           <div className="text-lg text-gray-400">
-            Remaining: {currentPlayer?.score} points
+            Remaining: <span className="font-main-score">{currentPlayer?.score}</span> points
           </div>
         </div>
       </div>
@@ -110,7 +112,8 @@ const MobileInput: React.FC<MobileInputProps> = ({
             <button
               key={num}
               onClick={() => handleNumberInput(num.toString())}
-              className="aspect-square bg-dart-gold text-dart-dark text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+              className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+              style={{ backgroundColor: 'var(--color-primary)' }}
             >
               {num}
             </button>
@@ -120,20 +123,23 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <button
             onClick={handleContextButton}
             disabled={contextButtonProps.disabled}
-            className={`aspect-square ${contextButtonProps.bgColor} text-white text-2xl font-bold active:scale-95 transition-all duration-200 border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed`}
+            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-all duration-200 border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: contextButtonProps.bgColor }}
           >
             {contextButtonProps.text}
           </button>
           <button
             onClick={() => handleNumberInput('0')}
-            className="aspect-square bg-dart-gold text-dart-dark text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+            style={{ backgroundColor: 'var(--color-primary)' }}
           >
             0
           </button>
           <button
             onClick={handleSubmit}
             disabled={!isValidScore() || !gameState.gameStarted}
-            className="aspect-square bg-green-600 text-white text-xl font-bold active:scale-95 transition-transform border border-dart-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+            className="aspect-square text-white text-xl font-bold active:scale-95 transition-transform border border-dart-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+            style={{ backgroundColor: 'var(--color-accent)' }}
           >
             ✓
           </button>
@@ -142,7 +148,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
         {/* Score Validation */}
         {inputScore && !isValidScore() && (
           <div className="text-center mt-4">
-            <div className="bg-red-600 text-white px-3 py-1 rounded text-sm">
+            <div className="text-white px-3 py-1 rounded text-sm" style={{ backgroundColor: 'var(--color-error)' }}>
               ⚠️ Score must be 0-180
             </div>
           </div>

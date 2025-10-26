@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface HamburgerMenuProps {
   viewMode: 'settings' | 'scoreboard' | 'mobile';
@@ -6,6 +7,7 @@ interface HamburgerMenuProps {
 }
 
 const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChange }) => {
+  const { currentTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
 
   const toggleMenu = () => {
@@ -47,9 +49,10 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
               onClick={() => handleMenuItemClick('scoreboard')}
               className={`w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors duration-200 flex items-center gap-3 ${
                 viewMode === 'scoreboard' 
-                  ? 'bg-dart-gold text-dart-dark font-semibold' 
+                  ? 'text-white font-semibold' 
                   : 'text-white'
               }`}
+              style={viewMode === 'scoreboard' ? { backgroundColor: 'var(--color-primary)' } : {}}
             >
               <span className="text-xl">📺</span>
               <span>Scoreboard</span>
@@ -59,9 +62,10 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
               onClick={() => handleMenuItemClick('mobile')}
               className={`w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors duration-200 flex items-center gap-3 ${
                 viewMode === 'mobile' 
-                  ? 'bg-dart-gold text-dart-dark font-semibold' 
+                  ? 'text-white font-semibold' 
                   : 'text-white'
               }`}
+              style={viewMode === 'mobile' ? { backgroundColor: 'var(--color-primary)' } : {}}
             >
               <span className="text-xl">📱</span>
               <span>Mobile Input</span>
@@ -71,9 +75,10 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
               onClick={() => handleMenuItemClick('settings')}
               className={`w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors duration-200 flex items-center gap-3 ${
                 viewMode === 'settings' 
-                  ? 'bg-dart-gold text-dart-dark font-semibold' 
+                  ? 'text-white font-semibold' 
                   : 'text-white'
               }`}
+              style={viewMode === 'settings' ? { backgroundColor: 'var(--color-primary)' } : {}}
             >
               <span className="text-xl">⚙️</span>
               <span>Settings</span>

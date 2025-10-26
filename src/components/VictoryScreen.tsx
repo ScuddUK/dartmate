@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameState, Player } from '../types/game';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface VictoryScreenProps {
   gameState: GameState;
@@ -7,6 +8,7 @@ interface VictoryScreenProps {
 }
 
 export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGame }) => {
+  const { currentTheme } = useTheme();
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
@@ -110,8 +112,8 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
             style={styles.spacing}
           >
             <h1 
-              className="font-bold text-dart-gold mr-4"
-              style={styles.titleText}
+              className="font-bold mr-4"
+              style={{ ...styles.titleText, color: 'var(--color-primary)' }}
             >
               WINNER
             </h1>
@@ -132,13 +134,13 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
             style={{ ...styles.cardPadding, ...styles.spacing }}
           >
             <h3 
-              className="font-bold text-dart-gold"
-              style={{ ...styles.sectionTitle, marginBottom: `${Math.max(6, 12 * spacingScale)}px` }}
+              className="font-bold"
+              style={{ ...styles.sectionTitle, marginBottom: `${Math.max(6, 12 * spacingScale)}px`, color: 'var(--color-primary)' }}
             >
               Total Average
             </h3>
             <div 
-              className="font-bold text-green-400"
+              className="font-score font-bold text-green-400"
               style={{ 
                 fontSize: `${Math.max(32, 64 * textScale)}px`,
                 lineHeight: '1'
@@ -151,8 +153,13 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
           {/* Start New Game Button */}
           <button
             onClick={onNewGame}
-            className="bg-dart-gold hover:bg-yellow-500 text-black font-bold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-            style={styles.button}
+            className="text-white font-bold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+            style={{ 
+               ...styles.button,
+               backgroundColor: 'var(--color-primary)'
+             }}
+             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-secondary)'}
+             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary)'}
           >
             🎯 Start New Game
           </button>
