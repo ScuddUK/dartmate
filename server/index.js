@@ -121,16 +121,28 @@ io.on('connection', (socket) => {
     const player = gameState.players.find(p => p.id === playerId);
     
     if (player && score >= 0 && score <= 180) {
-      // Add to throw history
-      player.throws.push({
+      const throwRecord = {
         score,
         timestamp: new Date(),
-        remainingScore: player.score - score
-      });
+        remainingScore: player.score - score,
+        playerId: playerId,
+        previousScore: player.score
+      };
       
-      // Keep only last 10 throws
+      // Add to player's throw history
+      player.throws.push(throwRecord);
+      
+      // Add to global throw history for proper undo functionality
+      gameState.throwHistory.push(throwRecord);
+      
+      // Keep only last 10 throws per player
       if (player.throws.length > 10) {
         player.throws = player.throws.slice(-10);
+      }
+      
+      // Keep only last 50 throws in global history
+      if (gameState.throwHistory.length > 50) {
+        gameState.throwHistory = gameState.throwHistory.slice(-50);
       }
       
       // Update score
@@ -197,14 +209,32 @@ io.on('connection', (socket) => {
   
   // Handle undo last throw
   socket.on('undoLastThrow', () => {
-    const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
-    if (currentPlayer && currentPlayer.throws.length > 0) {
-      const lastThrow = currentPlayer.throws.pop();
-      currentPlayer.score = lastThrow.remainingScore + lastThrow.score;
-      updatePlayerAverage(currentPlayer);
-      // Switch back to previous player
-      gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
-      io.emit('gameState', gameState);
+    if (gameState.throwHistory.length > 0) {
+      // Get the most recent throw from global history
+      const lastThrow = gameState.throwHistory.pop();
+      const player = gameState.players.find(p => p.id === lastThrow.playerId);
+      
+      if (player) {
+        // Restore the player's score to what it was before the throw
+        player.score = lastThrow.previousScore;
+        
+        // Remove the throw from the player's individual history
+        const throwIndex = player.throws.findIndex(t => 
+          t.timestamp.getTime() === lastThrow.timestamp.getTime() && 
+          t.score === lastThrow.score
+        );
+        if (throwIndex !== -1) {
+          player.throws.splice(throwIndex, 1);
+        }
+        
+        // Update player average
+        updatePlayerAverage(player);
+        
+        // Set current player to the player who made the undone throw
+        gameState.currentPlayer = lastThrow.playerId;
+        
+        io.emit('gameState', gameState);
+      }
     }
   });
   
@@ -218,6 +248,7 @@ io.on('connection', (socket) => {
     });
     gameState.currentPlayer = 1;
     gameState.gameStarted = false;
+    gameState.throwHistory = [];
     io.emit('gameState', gameState);
   });
   
@@ -239,6 +270,7 @@ function resetLeg() {
   });
   gameState.currentPlayer = 1;
   gameState.currentLeg++;
+  gameState.throwHistory = [];
 }
 
 function updatePlayerAverage(player) {
