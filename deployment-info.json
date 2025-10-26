@@ -1,0 +1,54 @@
+{
+  "name": "DartScorer",
+  "version": "1.0.0",
+  "description": "Professional dart scoring application with real-time features",
+  "prepared": "2025-10-26T13:40:37.229Z",
+  "platforms": {
+    "railway": {
+      "recommended": true,
+      "cost": "FREE ($5 monthly credit)",
+      "features": [
+        "Full Socket.IO",
+        "No sleep mode",
+        "Custom domains"
+      ],
+      "url": "https://railway.app",
+      "steps": [
+        "1. Push to GitHub",
+        "2. Connect Railway to GitHub repo",
+        "3. Deploy automatically",
+        "4. Set NODE_ENV=production"
+      ]
+    },
+    "render": {
+      "cost": "FREE (750 hours/month)",
+      "features": [
+        "Full Socket.IO",
+        "Sleeps after 15min",
+        "Custom domains"
+      ],
+      "url": "https://render.com",
+      "steps": [
+        "1. Push to GitHub",
+        "2. Create Web Service on Render",
+        "3. Set build: npm install && npm run build",
+        "4. Set start: npm run start:prod"
+      ]
+    },
+    "vercel": {
+      "cost": "FREE",
+      "features": [
+        "Static only",
+        "No Socket.IO",
+        "Lightning fast"
+      ],
+      "url": "https://vercel.com",
+      "steps": [
+        "1. Connect Vercel to GitHub",
+        "2. Set framework: Vite",
+        "3. Set output: dist",
+        "4. Deploy static build"
+      ]
+    }
+  }
+}

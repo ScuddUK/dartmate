@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-dart-gold text-dart-dark font-semibold py-3 px-6 rounded-lg hover:bg-yellow-400 transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-500 transition-colors duration-200;
+  }
+  
+  .btn-danger {
+    @apply bg-dart-red text-white font-semibold py-3 px-6 rounded-lg hover:bg-red-700 transition-colors duration-200;
+  }
+  
+  .score-display {
+    @apply text-6xl font-bold text-dart-gold font-mono;
+  }
+  
+  .player-name {
+    @apply text-2xl font-semibold text-white;
+  }
+  
+  .number-pad-btn {
+    @apply bg-gray-700 hover:bg-gray-600 text-white font-bold text-2xl py-4 px-6 rounded-lg transition-colors duration-150 active:bg-gray-500;
+  }
+}

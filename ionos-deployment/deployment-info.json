@@ -1,0 +1,35 @@
+{
+  "name": "DartScorer",
+  "version": "1.0.0",
+  "created": "2025-10-26T13:26:17.903Z",
+  "packages": {
+    "vps-full-app": {
+      "description": "Complete application with real-time features for IONOS VPS/Cloud Server",
+      "features": [
+        "Real-time scoring synchronization",
+        "Multi-device support",
+        "Socket.IO connectivity",
+        "Server-side game management",
+        "Full feature set"
+      ],
+      "requirements": "IONOS VPS or Cloud Server",
+      "cost": "€4-15/month"
+    },
+    "static-deploy-now": {
+      "description": "Static version for IONOS Deploy Now (shared hosting)",
+      "features": [
+        "Local scoring interface",
+        "Game configuration",
+        "Mobile/desktop views",
+        "Browser-only functionality"
+      ],
+      "limitations": [
+        "No real-time synchronization",
+        "No multi-device support",
+        "Local storage only"
+      ],
+      "requirements": "IONOS Deploy Now (shared hosting)",
+      "cost": "FREE"
+    }
+  }
+}
