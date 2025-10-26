@@ -13,18 +13,22 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
   onStartGame
 }) => {
   const formatThrowHistory = (throws: any[]) => {
-    return throws.slice(-8).map((throwRecord, i) => {
+    return throws.slice(-5).map((throwRecord, i) => {
       const previousTotal = i === 0 ? 501 : (501 - throws.slice(0, throws.indexOf(throwRecord)).reduce((sum, t) => sum + t.score, 0));
       const newTotal = throwRecord.remainingScore;
+      const isHighScore = throwRecord.score >= 100;
       
       return (
         <div key={i} className="mb-2 text-center">
-          <div className="text-xl font-bold text-dart-gold flex items-center justify-center gap-3">
-            <span>{throwRecord.score}</span>
-            <span className="text-lg text-gray-300">
-              <span className="line-through opacity-60">{previousTotal}</span>
-              <span className="mx-2">→</span>
-              <span className="font-bold text-white">{newTotal}</span>
+          <div className="text-3xl lg:text-5xl xl:text-6xl font-bold flex items-center justify-center gap-3 lg:gap-4">
+            <span className={`min-w-[60px] lg:min-w-[80px] ${isHighScore ? 'text-green-400' : 'text-dart-gold'}`}>
+              {throwRecord.score}
+            </span>
+            <span className="text-dart-gold text-3xl lg:text-5xl xl:text-6xl">•</span>
+            <span className="text-gray-300 flex items-center gap-2 lg:gap-3 text-3xl lg:text-5xl xl:text-6xl">
+              <span className="line-through opacity-60 min-w-[60px] lg:min-w-[80px]">{previousTotal}</span>
+              <span className="mx-1 text-dart-gold">→</span>
+              <span className="font-bold text-white min-w-[60px] lg:min-w-[80px] text-4xl lg:text-6xl xl:text-7xl">{newTotal}</span>
             </span>
           </div>
         </div>
@@ -156,15 +160,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
         ))}
       </div>
 
-      {/* Instructions */}
-      <div className="text-center mt-6 lg:mt-12 text-gray-400">
-        <p className="text-base lg:text-lg">
-          📱 Switch to Mobile view for score input | 📺 Use this view for TV display
-        </p>
-        <p className="text-sm lg:text-base mt-2">
-          Game starts at 501 points
-        </p>
-      </div>
+
     </div>
   );
 };
