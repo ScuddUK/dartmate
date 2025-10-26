@@ -156,7 +156,6 @@ function App() {
           gameState={gameState}
           onResetGame={resetGame}
           onStartGame={startGame}
-          onUpdatePlayerName={updatePlayerName}
         />
       ) : (
         <MobileInput 
