@@ -39,16 +39,7 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
     return totalScore / validThrows.length;
   };
 
-  // Get winner's top 3 highest scores
-  const getWinnerTop3Scores = (): number[] => {
-    const winnerScores = winner.throws
-      .map(throwRecord => throwRecord.score)
-      .filter(score => typeof score === 'number' && score > 0);
-    return winnerScores.sort((a, b) => b - a).slice(0, 3);
-  };
-
   const winnerAverage = calculateTotalAverage(winner);
-  const top3Scores = getWinnerTop3Scores();
 
   // Dynamic viewport-based scaling
   const isLandscape = screenSize.width > screenSize.height;
@@ -135,117 +126,25 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
             </span>
           </div>
 
-          {/* Consolidated Stats Box - Total Average & Top 3 Highest Scores */}
+          {/* Total Average Section */}
           <div 
-            className="bg-gray-800 rounded-xl"
+            className="bg-gray-800 rounded-xl text-center"
             style={{ ...styles.cardPadding, ...styles.spacing }}
           >
-            {/* Total Average Section */}
-            <div 
-              className="mb-6"
-              style={{ marginBottom: `${Math.max(16, 24 * spacingScale)}px` }}
+            <h3 
+              className="font-bold text-dart-gold"
+              style={{ ...styles.sectionTitle, marginBottom: `${Math.max(6, 12 * spacingScale)}px` }}
             >
-              <h3 
-                className="font-bold text-dart-gold"
-                style={{ ...styles.sectionTitle, marginBottom: `${Math.max(6, 12 * spacingScale)}px` }}
-              >
-                Total Average
-              </h3>
-              <div 
-                className="font-bold text-green-400"
-                style={{ 
-                  fontSize: `${Math.max(28, 48 * textScale)}px`,
-                  lineHeight: '1'
-                }}
-              >
-                {winnerAverage.toFixed(1)}
-              </div>
-            </div>
-
-            {/* Divider */}
+              Total Average
+            </h3>
             <div 
-              className="border-t border-gray-600"
-              style={{ marginBottom: `${Math.max(16, 24 * spacingScale)}px` }}
-            />
-
-            {/* Top 3 Highest Scores Section */}
-            <div>
-              <h3 
-                className="font-bold text-dart-gold"
-                style={{ ...styles.sectionTitle, marginBottom: `${Math.max(12, 16 * spacingScale)}px` }}
-              >
-                3 Highest Scores
-              </h3>
-              <div 
-                className={`grid ${isLandscape ? 'grid-cols-3' : 'grid-cols-1'}`}
-                style={{ gap: `${Math.max(6, 12 * spacingScale)}px` }}
-              >
-                {top3Scores.length > 0 ? (
-                  top3Scores.map((score, index) => (
-                    <div 
-                      key={index} 
-                      className="bg-gray-700 rounded-lg"
-                      style={{ padding: `${Math.max(8, 16 * spacingScale)}px` }}
-                    >
-                      <div 
-                        className="font-bold text-dart-gold"
-                        style={{ 
-                          fontSize: `${Math.max(10, 14 * textScale)}px`,
-                          lineHeight: '1.2',
-                          marginBottom: `${Math.max(2, 6 * spacingScale)}px`
-                        }}
-                      >
-                        #{index + 1}
-                      </div>
-                      <div 
-                        className="font-bold text-white"
-                        style={{ 
-                          fontSize: `${Math.max(16, 28 * textScale)}px`,
-                          lineHeight: '1'
-                        }}
-                      >
-                        {score}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div 
-                    className="col-span-full text-gray-400 italic"
-                    style={styles.sectionTitle}
-                  >
-                    No scores recorded
-                  </div>
-                )}
-                
-                {/* Fill empty slots if less than 3 scores */}
-                {Array.from({ length: Math.max(0, 3 - top3Scores.length) }).map((_, index) => (
-                  <div 
-                    key={`empty-${index}`} 
-                    className="bg-gray-700 rounded-lg opacity-50"
-                    style={{ padding: `${Math.max(8, 16 * spacingScale)}px` }}
-                  >
-                    <div 
-                      className="font-bold text-gray-500"
-                      style={{ 
-                        fontSize: `${Math.max(10, 14 * textScale)}px`,
-                        lineHeight: '1.2',
-                        marginBottom: `${Math.max(2, 6 * spacingScale)}px`
-                      }}
-                    >
-                      #{top3Scores.length + index + 1}
-                    </div>
-                    <div 
-                      className="font-bold text-gray-500"
-                      style={{ 
-                        fontSize: `${Math.max(16, 28 * textScale)}px`,
-                        lineHeight: '1'
-                      }}
-                    >
-                      -
-                    </div>
-                  </div>
-                ))}
-              </div>
+              className="font-bold text-green-400"
+              style={{ 
+                fontSize: `${Math.max(32, 64 * textScale)}px`,
+                lineHeight: '1'
+              }}
+            >
+              {winnerAverage.toFixed(1)}
             </div>
           </div>
 
