@@ -209,7 +209,13 @@ io.on('connection', (socket) => {
               
             if (player.setsWon >= setsNeeded) {
               // Game over - player wins
+              resetLeg(); // Reset scores for display purposes
               io.emit('gameWon', { winner: player });
+              return;
+            } else {
+              // Set won but match continues - reset for new set
+              resetLeg();
+              io.emit('gameState', gameState);
               return;
             }
           }
@@ -221,12 +227,16 @@ io.on('connection', (socket) => {
             
           if (player.legsWon >= legsNeeded) {
             // Game over - player wins
+            resetLeg(); // Reset scores for display purposes
             io.emit('gameWon', { winner: player });
             return;
           }
         }
         
         resetLeg();
+        // Broadcast updated state after leg reset
+        io.emit('gameState', gameState);
+        return;
       }
       
       // Update score (only for valid, non-bust throws)
