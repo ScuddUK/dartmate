@@ -145,11 +145,11 @@ const MobileInput: React.FC<MobileInputProps> = ({
       )}
 
       {/* Recent Throws */}
-      {selectedPlayerData && selectedPlayerData.throws.length > 0 && (
+      {currentPlayer && currentPlayer.throws.length > 0 && (
         <div className="mt-8 text-center">
           <h3 className="text-lg font-semibold mb-3">Recent Throws:</h3>
           <div className="flex justify-center gap-2 flex-wrap">
-            {selectedPlayerData.throws.slice(-5).map((throwRecord, index) => (
+            {currentPlayer.throws.slice(-5).map((throwRecord, index) => (
               <span
                 key={index}
                 className="bg-gray-700 px-3 py-1 rounded text-dart-gold font-mono"
