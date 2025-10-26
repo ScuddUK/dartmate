@@ -55,9 +55,16 @@ let gameState = {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
+  console.log('Current game state:', JSON.stringify(gameState, null, 2));
   
   // Send current game state to new client
   socket.emit('gameState', gameState);
+
+  // Handle explicit game state requests
+  socket.on('requestGameState', () => {
+    console.log('Game state requested by:', socket.id);
+    socket.emit('gameState', gameState);
+  });
   
   // Handle starting a new game with settings
   socket.on('startGameWithSettings', (settings) => {

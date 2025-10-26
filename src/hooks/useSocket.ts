@@ -8,16 +8,42 @@ export const useSocket = () => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3001');
+    // Determine the correct server URL based on environment
+    const getServerUrl = () => {
+      if (typeof window !== 'undefined') {
+        // In production, use the same origin as the current page
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          return window.location.origin;
+        }
+      }
+      // In development, use localhost
+      return 'http://localhost:3001';
+    };
+
+    const serverUrl = getServerUrl();
+    console.log('Connecting to server:', serverUrl);
+    const newSocket = io(serverUrl);
     
     newSocket.on('connect', () => {
       setConnected(true);
-      console.log('Connected to server');
+      console.log('Connected to server successfully');
+      // Request initial game state
+      newSocket.emit('requestGameState');
     });
     
     newSocket.on('disconnect', () => {
       setConnected(false);
       console.log('Disconnected from server');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      setConnected(false);
+    });
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected after', attemptNumber, 'attempts');
+      setConnected(true);
     });
     
     newSocket.on('gameState', (state: GameState) => {
