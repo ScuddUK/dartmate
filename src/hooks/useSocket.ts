@@ -50,6 +50,19 @@ export const useSocket = () => {
       setGameState(state);
     });
     
+    newSocket.on('gameWon', (data: { winner: Player }) => {
+      setGameState(prevState => {
+        if (prevState) {
+          return {
+            ...prevState,
+            gameWon: true,
+            winner: data.winner
+          };
+        }
+        return prevState;
+      });
+    });
+    
     newSocket.on('bust', (data) => {
       alert(`Player ${data.playerId} went bust!`);
     });

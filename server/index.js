@@ -121,10 +121,51 @@ io.on('connection', (socket) => {
     const player = gameState.players.find(p => p.id === playerId);
     
     if (player && score >= 0 && score <= 180) {
+      // Check if this would be a bust before recording anything
+      const newScore = player.score - score;
+      
+      if (newScore < 0) {
+        // Bust - don't record the throw, just emit bust event
+        socket.emit('bust', { playerId });
+        
+        // Record a bust in the throw history for display purposes
+        const bustRecord = {
+          score: 'bust',
+          timestamp: new Date(),
+          remainingScore: player.score, // Score remains unchanged
+          playerId: playerId,
+          previousScore: player.score
+        };
+        
+        // Add bust record to player's throw history
+        player.throws.push(bustRecord);
+        
+        // Add to global throw history for proper undo functionality
+        gameState.throwHistory.push(bustRecord);
+        
+        // Keep only last 10 throws per player
+        if (player.throws.length > 10) {
+          player.throws = player.throws.slice(-10);
+        }
+        
+        // Keep only last 50 throws in global history
+        if (gameState.throwHistory.length > 50) {
+          gameState.throwHistory = gameState.throwHistory.slice(-50);
+        }
+        
+        // Move to next player (alternate between player IDs 1 and 2)
+        gameState.currentPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+        
+        // Broadcast updated state
+        io.emit('gameState', gameState);
+        return;
+      }
+      
+      // Valid throw - record it
       const throwRecord = {
         score,
         timestamp: new Date(),
-        remainingScore: player.score - score,
+        remainingScore: newScore,
         playerId: playerId,
         previousScore: player.score
       };
@@ -144,9 +185,6 @@ io.on('connection', (socket) => {
       if (gameState.throwHistory.length > 50) {
         gameState.throwHistory = gameState.throwHistory.slice(-50);
       }
-      
-      // Update score
-      const newScore = player.score - score;
       
       if (newScore === 0) {
         // Player wins the leg
@@ -189,12 +227,10 @@ io.on('connection', (socket) => {
         }
         
         resetLeg();
-      } else if (newScore < 0) {
-        // Bust - reset to previous score
-        socket.emit('bust', { playerId });
-      } else {
-        player.score = newScore;
       }
+      
+      // Update score (only for valid, non-bust throws)
+      player.score = newScore;
       
       // Calculate average
       updatePlayerAverage(player);
@@ -279,8 +315,15 @@ function updatePlayerAverage(player) {
     return;
   }
   
-  const totalScore = player.throws.reduce((sum, throw_) => sum + throw_.score, 0);
-  player.averageScore = Math.round((totalScore / player.throws.length) * 100) / 100;
+  // Filter out bust throws when calculating average
+  const validThrows = player.throws.filter(throw_ => typeof throw_.score === 'number');
+  if (validThrows.length === 0) {
+    player.averageScore = 0;
+    return;
+  }
+  
+  const totalScore = validThrows.reduce((sum, throw_) => sum + throw_.score, 0);
+  player.averageScore = Math.round((totalScore / validThrows.length) * 100) / 100;
 }
 
 const PORT = process.env.PORT || 3001;

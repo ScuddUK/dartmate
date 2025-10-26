@@ -9,7 +9,7 @@ export interface Player {
 }
 
 export interface ThrowRecord {
-  score: number;
+  score: number | 'bust';
   previousScore: number;
   newScore: number;
   timestamp: number;
@@ -33,4 +33,6 @@ export interface GameState {
   settings: GameSettings;
   currentLeg: number;
   currentSet: number;
+  gameWon?: boolean;
+  winner?: Player;
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameState } from '../types/game';
 
 interface ScoreboardProps {
@@ -12,25 +12,56 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
   onResetGame, 
   onStartGame
 }) => {
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  useEffect(() => {
+    const checkOrientation = () => {
+      // Check if device is in landscape mode and is mobile/tablet size
+      const isLandscapeOrientation = window.innerHeight < window.innerWidth;
+      const isMobileSize = window.innerWidth < 1024; // Below lg breakpoint
+      setIsLandscape(isLandscapeOrientation && isMobileSize);
+    };
+
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
+
   const formatThrowHistory = (throws: any[]) => {
     return throws.slice(-5).map((throwRecord, i) => {
-      const previousTotal = i === 0 ? 501 : (501 - throws.slice(0, throws.indexOf(throwRecord)).reduce((sum, t) => sum + t.score, 0));
+      const previousTotal = i === 0 ? 501 : (501 - throws.slice(0, throws.indexOf(throwRecord)).reduce((sum, t) => {
+        return sum + (typeof t.score === 'number' ? t.score : 0);
+      }, 0));
       const newTotal = throwRecord.remainingScore;
-      const isHighScore = throwRecord.score >= 100;
+      const isBust = throwRecord.score === 'bust';
+      const isHighScore = typeof throwRecord.score === 'number' && throwRecord.score >= 100;
       
       return (
-        <div key={i} className="mb-4 text-center">
-          <div className="text-3xl lg:text-5xl xl:text-6xl font-bold flex items-center justify-center gap-6 lg:gap-7">
+        <div key={i} className={`text-center ${isLandscape ? 'mb-1' : 'mb-4'}`}>
+          <div className={`font-bold flex items-center justify-center ${
+            isLandscape ? 'text-sm gap-1' : 'text-3xl lg:text-5xl xl:text-6xl gap-6 lg:gap-7'
+          }`}>
             <div className="flex items-center gap-1">
-              <span className={`min-w-[60px] lg:min-w-[80px] ${isHighScore ? 'text-green-400' : 'text-dart-gold'}`}>
+              <span className={`${isLandscape ? 'min-w-[30px]' : 'min-w-[60px] lg:min-w-[80px]'} ${
+                isBust ? 'text-red-400' : isHighScore ? 'text-green-400' : 'text-dart-gold'
+              }`}>
                 {throwRecord.score}
               </span>
-              <span className="text-dart-gold text-3xl lg:text-5xl xl:text-6xl">•</span>
+              <span className={`text-dart-gold ${isLandscape ? 'text-sm' : 'text-3xl lg:text-5xl xl:text-6xl'}`}>•</span>
             </div>
-            <span className="text-gray-300 flex items-center gap-4 lg:gap-5 text-3xl lg:text-5xl xl:text-6xl">
-              <span className="line-through opacity-60 min-w-[60px] lg:min-w-[80px]">{previousTotal}</span>
-              <span className="mx-2 text-dart-gold">→</span>
-              <span className="font-bold text-white min-w-[60px] lg:min-w-[80px] text-4xl lg:text-6xl xl:text-7xl">{newTotal}</span>
+            <span className={`text-gray-300 flex items-center ${
+              isLandscape ? 'gap-1 text-sm' : 'gap-4 lg:gap-5 text-3xl lg:text-5xl xl:text-6xl'
+            }`}>
+              <span className={`line-through opacity-60 ${isLandscape ? 'min-w-[30px]' : 'min-w-[60px] lg:min-w-[80px]'}`}>{previousTotal}</span>
+              <span className={`text-dart-gold ${isLandscape ? 'mx-1' : 'mx-2'}`}>→</span>
+              <span className={`font-bold text-white ${
+                isLandscape ? 'min-w-[30px] text-sm' : 'min-w-[60px] lg:min-w-[80px] text-4xl lg:text-6xl xl:text-7xl'
+              }`}>{newTotal}</span>
             </span>
           </div>
         </div>
@@ -40,11 +71,10 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
 
   return (
     <div className="min-h-screen p-4 text-white">
-      {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-4xl lg:text-6xl font-bold text-dart-gold mb-4">🎯 DART SCORER PRO</h1>
-        {gameState.settings && (
-          <div className="text-xl lg:text-2xl text-gray-400">
+      {/* Game Info */}
+      {gameState.settings && (
+        <div className={`text-center ${isLandscape ? 'mb-3' : 'mb-6'}`}>
+          <div className={`text-gray-400 ${isLandscape ? 'text-sm' : 'text-xl lg:text-2xl'}`}>
             {gameState.settings.setsEnabled ? (
               <div>
                 Set {gameState.currentSet || 1} • Leg {gameState.currentLeg || 1} • 
@@ -59,85 +89,108 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Players Grid - Dynamic scaling based on screen size */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8 h-[calc(100vh-200px)] max-w-full mx-auto">
+      {/* Players Grid - Dynamic scaling based on screen size and orientation */}
+      <div className={`grid gap-4 lg:gap-8 h-[calc(100vh-200px)] max-w-full mx-auto ${
+        isLandscape ? 'grid-cols-2' : 'grid-cols-1 lg:grid-cols-2'
+      }`}>
         {gameState.players.map((player) => (
           <div
             key={player.id}
-            className={`dart-display p-4 lg:p-8 rounded-xl border-4 transition-all duration-300 flex flex-col h-full ${
+            className={`dart-display rounded-xl border-4 transition-all duration-300 flex flex-col h-full ${
+              isLandscape ? 'p-2' : 'p-4 lg:p-8'
+            } ${
               gameState.currentPlayer === player.id
                 ? 'border-dart-gold bg-dart-gold bg-opacity-10 shadow-lg shadow-dart-gold/30'
                 : 'border-gray-600 bg-gray-800 bg-opacity-50'
             }`}
           >
             {/* Player Name - No editing functionality */}
-            <div className="text-center mb-4 lg:mb-6">
-              <h2 className="text-3xl lg:text-5xl xl:text-6xl font-bold text-dart-gold">
+            <div className={`text-center ${isLandscape ? 'mb-2' : 'mb-4 lg:mb-6'}`}>
+              <h2 className={`font-bold text-dart-gold ${
+                isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
+              }`}>
                 {player.name}
               </h2>
             </div>
 
             {/* Current Score */}
-            <div className="text-center mb-6 lg:mb-8">
-              <div className="text-6xl lg:text-8xl xl:text-9xl font-bold text-dart-gold mb-2">
+            <div className={`text-center ${isLandscape ? 'mb-3' : 'mb-6 lg:mb-8'}`}>
+              <div className={`font-bold text-dart-gold ${
+                isLandscape ? 'text-4xl mb-1' : 'text-6xl lg:text-8xl xl:text-9xl mb-2'
+              }`}>
                 {player.score}
               </div>
-              <div className="text-lg lg:text-2xl xl:text-3xl text-gray-300">
+              <div className={`text-gray-300 ${
+                isLandscape ? 'text-xs' : 'text-lg lg:text-2xl xl:text-3xl'
+              }`}>
                 Remaining Score
               </div>
             </div>
 
             {/* Stats Row */}
-            <div className={`grid gap-4 lg:gap-6 mb-4 lg:mb-6 ${gameState.settings?.setsEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <div className={`grid ${gameState.settings?.setsEnabled ? 'grid-cols-3' : 'grid-cols-2'} ${
+              isLandscape ? 'gap-2 mb-2' : 'gap-4 lg:gap-6 mb-4 lg:mb-6'
+            }`}>
               {gameState.settings?.setsEnabled && (
                 <div className="text-center">
-                  <div className="text-2xl lg:text-4xl xl:text-5xl font-bold text-purple-400">
+                  <div className={`font-bold text-purple-400 ${
+                    isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
+                  }`}>
                     {player.setsWon || 0}
                   </div>
-                  <div className="text-sm lg:text-lg xl:text-xl text-gray-400">Sets Won</div>
+                  <div className={`text-gray-400 ${
+                    isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
+                  }`}>Sets Won</div>
                 </div>
               )}
               <div className="text-center">
-                <div className="text-2xl lg:text-4xl xl:text-5xl font-bold text-green-400">
+                <div className={`font-bold text-green-400 ${
+                  isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
+                }`}>
                   {player.legsWon}
                 </div>
-                <div className="text-sm lg:text-lg xl:text-xl text-gray-400">Legs Won</div>
+                <div className={`text-gray-400 ${
+                  isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
+                }`}>Legs Won</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl lg:text-4xl xl:text-5xl font-bold text-blue-400">
+                <div className={`font-bold text-blue-400 ${
+                  isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl xl:text-5xl'
+                }`}>
                   {player.averageScore.toFixed(1)}
                 </div>
-                <div className="text-sm lg:text-lg xl:text-xl text-gray-400">Average</div>
+                <div className={`text-gray-400 ${
+                  isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
+                }`}>Average</div>
               </div>
             </div>
 
             {/* Recent Throws - Flexible height */}
-            <div className="border-t border-gray-600 pt-4 flex-1 flex flex-col">
-              <div className="text-xl lg:text-2xl xl:text-3xl font-semibold text-gray-300 mb-4 text-center">Recent Throws</div>
+            <div className={`border-t border-gray-600 flex-1 flex flex-col ${
+              isLandscape ? 'pt-2' : 'pt-4'
+            }`}>
+              <div className={`font-semibold text-gray-300 text-center ${
+                isLandscape ? 'text-sm mb-2' : 'text-xl lg:text-2xl xl:text-3xl mb-4'
+              }`}>Recent Throws</div>
               <div className="flex-1 overflow-y-auto">
-                {player.throws.length > 0 ? (
-                  <div className="space-y-2">
-                    {formatThrowHistory(player.throws)}
-                  </div>
-                ) : (
-                  <div className="text-center text-gray-500 italic text-lg lg:text-2xl py-8">
-                    No throws yet
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Current Player Indicator */}
-            {gameState.currentPlayer === player.id && gameState.gameStarted && (
-              <div className="text-center mt-4">
-                <div className="inline-block bg-dart-gold text-dart-dark px-4 lg:px-6 py-2 lg:py-3 rounded-full font-bold animate-pulse text-lg lg:text-xl">
-                  🎯 YOUR TURN
+                  {player.throws.length > 0 ? (
+                    <div className={isLandscape ? 'space-y-0' : 'space-y-2'}>
+                      {formatThrowHistory(player.throws)}
+                    </div>
+                  ) : (
+                    <div className={`text-center text-gray-500 italic ${
+                      isLandscape ? 'text-sm py-4' : 'text-lg lg:text-2xl py-8'
+                    }`}>
+                      No throws yet
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
+
+
           </div>
         ))}
       </div>

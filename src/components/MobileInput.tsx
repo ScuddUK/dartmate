@@ -78,15 +78,14 @@ const MobileInput: React.FC<MobileInputProps> = ({
 
   return (
     <div className="min-h-screen bg-dart-dark text-white flex flex-col">
-      {/* Header - Simplified */}
-      <div className="text-center py-4 flex-shrink-0">
-        <h1 className="text-3xl font-bold text-dart-gold">🎯 Dart Scorer</h1>
-        {!gameState.gameStarted && (
+      {/* Game Status */}
+      {!gameState.gameStarted && (
+        <div className="text-center py-4 flex-shrink-0">
           <div className="bg-yellow-600 text-yellow-100 px-4 py-2 rounded-lg mt-2 mx-4">
             ⚠️ Game not started yet. Switch to Scoreboard view to start.
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Current Player Display - Compact */}
       <div className="text-center py-4 flex-shrink-0">

@@ -5,6 +5,7 @@ import MobileInput from './components/MobileInput';
 import GameSettings from './components/GameSettings';
 import ConnectionStatus from './components/ConnectionStatus';
 import HamburgerMenu from './components/HamburgerMenu';
+import { VictoryScreen } from './components/VictoryScreen';
 import { GameSettings as GameSettingsType } from './types/game';
 
 function App() {
@@ -59,6 +60,11 @@ function App() {
     }
   };
 
+  const handleNewGame = () => {
+    setViewMode('settings');
+    resetGame();
+  };
+
   if (!gameState && !loadingTimeout) {
     return (
       <div className="min-h-screen bg-dart-dark flex items-center justify-center">
@@ -97,6 +103,17 @@ function App() {
           </button>
         </div>
       </div>
+    );
+  }
+
+  // Show victory screen if game is won
+  if (gameState.gameWon && gameState.winner) {
+    return (
+      <VictoryScreen 
+        gameState={gameState}
+        winner={gameState.winner}
+        onNewGame={handleNewGame}
+      />
     );
   }
 
