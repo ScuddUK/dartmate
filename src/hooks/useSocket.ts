@@ -6,6 +6,11 @@ export const useSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
+  const [sessionCode, setSessionCode] = useState<string | null>(null);
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [masterCode, setMasterCode] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<any>(null);
 
   useEffect(() => {
     // Determine the correct server URL based on environment
@@ -22,13 +27,18 @@ export const useSocket = () => {
 
     const serverUrl = getServerUrl();
     console.log('Connecting to server:', serverUrl);
-    const newSocket = io(serverUrl);
+    const newSocket = io(serverUrl, {
+      transports: ['websocket'],
+      reconnectionAttempts: 6,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
+      timeout: 8000
+    });
     
     newSocket.on('connect', () => {
       setConnected(true);
       console.log('Connected to server successfully');
-      // Request initial game state
-      newSocket.emit('requestGameState');
+      // Session-based flow will fetch game state after create/join
     });
     
     newSocket.on('disconnect', () => {
@@ -44,10 +54,39 @@ export const useSocket = () => {
     newSocket.on('reconnect', (attemptNumber) => {
       console.log('Reconnected after', attemptNumber, 'attempts');
       setConnected(true);
+      // Auto rejoin on reconnect to maintain session persistence
+      if (sessionCode) {
+        newSocket.emit('joinSession', { code: sessionCode });
+      }
     });
     
     newSocket.on('gameState', (state: GameState) => {
       setGameState(state);
+    });
+
+    newSocket.on('pairCode', ({ code, masterCode }) => {
+      setPairCode(code);
+      setMasterCode(masterCode ?? null);
+      setSessionCode(code);
+      console.log('✅ Pair code received:', code);
+    });
+
+    newSocket.on('pairCodeError', ({ error }) => {
+      console.error('Pair code error:', error);
+      setSessionError(error);
+    });
+
+    newSocket.on('sessionJoined', ({ code }) => {
+      setSessionCode(code);
+      setSessionError(null);
+    });
+
+    newSocket.on('sessionError', ({ error }) => {
+      setSessionError(error);
+    });
+
+    newSocket.on('connectionStatus', (status) => {
+      setConnectionStatus(status);
     });
     
     newSocket.on('gameWon', (data: { winner: Player }) => {
@@ -76,7 +115,12 @@ export const useSocket = () => {
 
   const submitScore = (score: number, playerId: number) => {
     if (socket) {
-      socket.emit('submitScore', { score, playerId });
+      if (sessionCode) {
+        socket.emit('submitScoreInSession', { code: sessionCode, score, playerId });
+      } else {
+        // Fallback to legacy behavior
+        socket.emit('submitScore', { score, playerId });
+      }
     }
   };
 
@@ -106,25 +150,50 @@ export const useSocket = () => {
 
   const startGameWithSettings = (settings: GameSettings) => {
     if (socket) {
+      console.log('🔧 Starting game with settings:', settings);
       socket.emit('startGameWithSettings', settings);
+    }
+  };
+
+  const joinSession = (code: string) => {
+    if (socket) {
+      socket.emit('joinSession', { code });
+    }
+  };
+
+  const requestPairCode = () => {
+    if (socket) {
+      console.log('🔁 Requesting pair code re-emit');
+      socket.emit('requestPairCode');
     }
   };
 
   const setStartingPlayer = (playerId: number) => {
     if (socket) {
-      socket.emit('setStartingPlayer', { playerId });
+      if (sessionCode) {
+        socket.emit('setStartingPlayerInSession', { code: sessionCode, playerId });
+      } else {
+        socket.emit('setStartingPlayer', { playerId });
+      }
     }
   };
 
   return {
     gameState,
     connected,
+    sessionCode,
+    pairCode,
+    masterCode,
+    sessionError,
+    connectionStatus,
     submitScore,
     undoLastThrow,
     resetGame,
     startGame,
     updatePlayerName,
     startGameWithSettings,
-    setStartingPlayer
+    setStartingPlayer,
+    joinSession,
+    requestPairCode
   };
 };

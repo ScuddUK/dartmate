@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { GameSettings } from '../types/game';
-import { useTheme } from '../contexts/ThemeContext';
 
 interface GameSettingsProps {
   onStartGame: (settings: GameSettings) => void;
 }
 
 const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => {
-  const { currentTheme, setTheme, themes } = useTheme();
   const [settings, setSettings] = useState<GameSettings>({
     startingScore: 501,
     gameFormat: 'firstTo',
@@ -74,44 +72,46 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
   };
 
   return (
-    <div className="min-h-screen bg-dart-dark text-white p-6" style={{ backgroundColor: 'var(--color-background)' }}>
+    <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text)' }}>
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--color-primary)' }}>🎯 Dart Scorer</h1>
-          <p className="text-gray-300">Configure your game settings</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Configure your game settings</p>
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-8 space-y-8">
+        <div className="rounded-xl p-8 space-y-8" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
           {/* Player Names */}
           <div>
             <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-primary)' }}>Players</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Player 1</label>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Player 1</label>
                 <input
                   type="text"
                   value={settings.playerNames[0]}
                   onChange={(e) => handlePlayerNameChange(0, e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-dart-gold focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-lg focus:outline-none"
+                  style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                   placeholder="Enter player 1 name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Player 2</label>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Player 2</label>
                 {!settings.dartBot.enabled ? (
                   <input
                      type="text"
                      value={settings.playerNames[1]}
                      onChange={(e) => handlePlayerNameChange(1, e.target.value)}
-                     className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                     className="w-full px-4 py-3 rounded-lg focus:outline-none"
+                     style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                      placeholder="Enter player 2 name"
                    />
                 ) : (
-                  <div className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg border border-gray-500 flex items-center">
+                  <div className="w-full px-4 py-3 rounded-lg flex items-center" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
                     <span className="text-blue-400 mr-2">🤖</span>
                     <span>{settings.dartBot.name}</span>
-                    <span className="ml-auto text-sm text-gray-300">
+                    <span className="ml-auto text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                       Avg: {settings.dartBot.averageScore}
                     </span>
                   </div>
@@ -120,18 +120,16 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
             </div>
             
             {/* DartBot Controls */}
-            <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-600">
+            <div className="mt-6 p-4 rounded-lg" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">🤖 DartBot</h3>
-                  <p className="text-sm text-gray-400">Play against an AI opponent</p>
+                  <h3 className="text-lg font-semibold">🤖 DartBot</h3>
+                  <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Play against an AI opponent</p>
                 </div>
                 <button
                   onClick={() => handleDartBotToggle(!settings.dartBot.enabled)}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                    settings.dartBot.enabled ? '' : 'bg-gray-600'
-                  }`}
-                  style={settings.dartBot.enabled ? { backgroundColor: 'var(--color-primary)' } : {}}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors`}
+                  style={settings.dartBot.enabled ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-border)' }}
                 >
                   <span
                     className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
@@ -143,13 +141,14 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
               
               {settings.dartBot.enabled && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                     Skill Level (Avg Score: {settings.dartBot.averageScore})
                   </label>
                   <select
                     value={settings.dartBot.skillLevel}
                     onChange={(e) => handleDartBotSkillChange(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-lg focus:outline-none"
+                    style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                   >
                     {Array.from({ length: 10 }, (_, i) => i + 1).map((level) => (
                       <option key={level} value={level}>
@@ -174,9 +173,9 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                   className={`py-3 px-4 rounded-lg font-semibold transition-all ${
                       settings.startingScore === score
                         ? 'text-white'
-                        : 'bg-gray-700 text-white hover:bg-gray-600'
+                        : 'hover:opacity-90'
                     }`}
-                    style={settings.startingScore === score ? { backgroundColor: 'var(--color-primary)' } : {}}
+                    style={settings.startingScore === score ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                 >
                   {score}
                 </button>
@@ -193,9 +192,9 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                 className={`py-4 px-6 rounded-lg font-bold text-lg transition-all ${
                   settings.gameFormat === 'firstTo'
                     ? 'text-white'
-                    : 'bg-gray-700 text-white hover:bg-gray-600'
+                    : 'hover:opacity-90'
                 }`}
-                style={settings.gameFormat === 'firstTo' ? { backgroundColor: 'var(--color-primary)' } : {}}
+                style={settings.gameFormat === 'firstTo' ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
               >
                 First To
               </button>
@@ -204,9 +203,9 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                 className={`py-4 px-6 rounded-lg font-bold text-lg transition-all ${
                   settings.gameFormat === 'bestOf'
                     ? 'text-white'
-                    : 'bg-gray-700 text-white hover:bg-gray-600'
+                    : 'hover:opacity-90'
                 }`}
-                style={settings.gameFormat === 'bestOf' ? { backgroundColor: 'var(--color-primary)' } : {}}
+                style={settings.gameFormat === 'bestOf' ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
               >
                 Best Of
               </button>
@@ -226,9 +225,9 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                   className={`py-3 px-4 rounded-lg font-bold text-lg transition-all ${
                     settings.legsToWin === legs
                       ? 'text-white'
-                      : 'bg-gray-700 text-white hover:bg-gray-600'
+                      : 'hover:opacity-90'
                   }`}
-                  style={settings.legsToWin === legs ? { backgroundColor: 'var(--color-primary)' } : {}}
+                  style={settings.legsToWin === legs ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                 >
                   {legs}
                 </button>
@@ -242,10 +241,8 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
               <h2 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>Enable Sets</h2>
               <button
                 onClick={() => setSettings({ ...settings, setsEnabled: !settings.setsEnabled })}
-                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                  settings.setsEnabled ? '' : 'bg-gray-600'
-                }`}
-                style={settings.setsEnabled ? { backgroundColor: 'var(--color-primary)' } : {}}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors`}
+                style={settings.setsEnabled ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-border)' }}
               >
                 <span
                   className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
@@ -257,7 +254,7 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
             
             {settings.setsEnabled && (
               <div>
-                <h3 className="text-lg font-medium text-gray-300 mb-3">
+                <h3 className="text-lg font-medium mb-3" style={{ color: 'var(--color-text-secondary)' }}>
                   {settings.gameFormat === 'firstTo' ? 'Sets to Win' : 'Total Sets'}
                 </h3>
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
@@ -268,9 +265,9 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                       className={`py-3 px-4 rounded-lg font-bold text-lg transition-all ${
                         settings.setsToWin === sets
                           ? 'text-white'
-                          : 'bg-gray-700 text-white hover:bg-gray-600'
+                          : 'hover:opacity-90'
                       }`}
-                      style={settings.setsToWin === sets ? { backgroundColor: 'var(--color-primary)' } : {}}
+                      style={settings.setsToWin === sets ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                     >
                       {sets}
                     </button>
@@ -280,52 +277,7 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
             )}
           </div>
 
-          {/* Theme Selection */}
-          <div>
-            <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-primary)' }}>Theme</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {themes.map((theme) => (
-                <button
-                  key={theme.id}
-                  onClick={() => setTheme(theme)}
-                  className={`p-4 rounded-lg border-2 transition-all duration-200 ${
-                    currentTheme.id === theme.id
-                      ? 'bg-opacity-10'
-                      : 'border-gray-600 hover:border-gray-500'
-                  }`}
-                  style={currentTheme.id === theme.id ? { 
-                    borderColor: 'var(--color-primary)', 
-                    backgroundColor: 'var(--color-primary-alpha)' 
-                  } : {}}
-                >
-                  <div className="flex items-center space-x-3">
-                    {/* Theme Color Preview */}
-                    <div className="flex space-x-1">
-                      <div 
-                        className="w-4 h-4 rounded-full border border-gray-400"
-                        style={{ backgroundColor: theme.colors.primary }}
-                      ></div>
-                      <div 
-                        className="w-4 h-4 rounded-full border border-gray-400"
-                        style={{ backgroundColor: theme.colors.secondary }}
-                      ></div>
-                      <div 
-                        className="w-4 h-4 rounded-full border border-gray-400"
-                        style={{ backgroundColor: theme.colors.accent }}
-                      ></div>
-                    </div>
-                    {/* Theme Name */}
-                    <span className={`font-medium ${
-                      currentTheme.id === theme.id ? '' : 'text-white'
-                    }`}
-                    style={currentTheme.id === theme.id ? { color: 'var(--color-primary)' } : {}}>
-                      {theme.name}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Theme selection removed per request */}
 
           {/* Start Game Button */}
           <div className="pt-6">

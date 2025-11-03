@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
 
 interface HamburgerMenuProps {
   viewMode: 'settings' | 'scoreboard' | 'mobile';
@@ -7,7 +6,6 @@ interface HamburgerMenuProps {
 }
 
 const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChange }) => {
-  const { currentTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
 
   const toggleMenu = () => {
@@ -24,7 +22,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
       {/* Hamburger Button */}
       <button
         onClick={toggleMenu}
-        className="bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-lg transition-colors duration-200 shadow-lg"
+        className="text-white p-3 rounded-lg transition-colors duration-200 shadow-lg"
+        style={{ backgroundColor: 'var(--color-primary)' }}
         aria-label="Menu"
       >
         <div className="w-6 h-6 flex flex-col justify-center items-center">
@@ -44,15 +43,18 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
           ></div>
           
           {/* Menu Items */}
-          <div className="absolute top-16 right-0 bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden z-50 min-w-48">
+          <div
+            className="absolute top-16 right-0 rounded-lg shadow-xl overflow-hidden z-50 min-w-48"
+            style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+          >
             <button
               onClick={() => handleMenuItemClick('scoreboard')}
-              className={`w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors duration-200 flex items-center gap-3 ${
-                viewMode === 'scoreboard' 
-                  ? 'text-white font-semibold' 
-                  : 'text-white'
+              className={`w-full px-4 py-3 text-left transition-colors duration-200 flex items-center gap-3 ${
+                viewMode === 'scoreboard' ? 'font-semibold' : ''
               }`}
-              style={viewMode === 'scoreboard' ? { backgroundColor: 'var(--color-primary)' } : {}}
+              style={viewMode === 'scoreboard'
+                ? { backgroundColor: 'var(--color-primary)', color: 'var(--color-background)' }
+                : { color: 'var(--color-text)' }}
             >
               <span className="text-xl">📺</span>
               <span>Scoreboard</span>
@@ -60,25 +62,25 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
             
             <button
               onClick={() => handleMenuItemClick('mobile')}
-              className={`w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors duration-200 flex items-center gap-3 ${
-                viewMode === 'mobile' 
-                  ? 'text-white font-semibold' 
-                  : 'text-white'
+              className={`w-full px-4 py-3 text-left transition-colors duration-200 flex items-center gap-3 ${
+                viewMode === 'mobile' ? 'font-semibold' : ''
               }`}
-              style={viewMode === 'mobile' ? { backgroundColor: 'var(--color-primary)' } : {}}
+              style={viewMode === 'mobile'
+                ? { backgroundColor: 'var(--color-primary)', color: 'var(--color-background)' }
+                : { color: 'var(--color-text)' }}
             >
               <span className="text-xl">📱</span>
-              <span>Mobile Input</span>
+              <span>Mobile Scorer</span>
             </button>
             
             <button
               onClick={() => handleMenuItemClick('settings')}
-              className={`w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors duration-200 flex items-center gap-3 ${
-                viewMode === 'settings' 
-                  ? 'text-white font-semibold' 
-                  : 'text-white'
+              className={`w-full px-4 py-3 text-left transition-colors duration-200 flex items-center gap-3 ${
+                viewMode === 'settings' ? 'font-semibold' : ''
               }`}
-              style={viewMode === 'settings' ? { backgroundColor: 'var(--color-primary)' } : {}}
+              style={viewMode === 'settings'
+                ? { backgroundColor: 'var(--color-primary)', color: 'var(--color-background)' }
+                : { color: 'var(--color-text)' }}
             >
               <span className="text-xl">⚙️</span>
               <span>Settings</span>

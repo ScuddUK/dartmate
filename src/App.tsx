@@ -3,80 +3,71 @@ import { useSocket } from './hooks/useSocket';
 import Scoreboard from './components/Scoreboard';
 import MobileInput from './components/MobileInput';
 import GameSettings from './components/GameSettings';
+import MainMenu from './components/MainMenu';
+import PairCodeModal from './components/PairCodeModal';
+import JoinCodeModal from './components/JoinCodeModal';
 import ConnectionStatus from './components/ConnectionStatus';
 import HamburgerMenu from './components/HamburgerMenu';
 import { VictoryScreen } from './components/VictoryScreen';
+import { MobilePostMatch } from './components/MobilePostMatch';
 import { LegStartPopup } from './components/LegStartPopup';
 import { GameSettings as GameSettingsType } from './types/game';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 function AppContent() {
   console.log('🎯 App component initializing...');
-  const [viewMode, setViewMode] = useState<'settings' | 'scoreboard' | 'mobile'>('settings');
-  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [viewMode, setViewMode] = useState<'menu' | 'settings' | 'scoreboard' | 'mobile'>('menu');
+  const [showPairCodeModal, setShowPairCodeModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [showLegStartPopup, setShowLegStartPopup] = useState(false);
   const [lastLegNumber, setLastLegNumber] = useState(1);
-  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings, setStartingPlayer } = useSocket();
+  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings, setStartingPlayer, pairCode, masterCode, joinSession, sessionError, sessionCode } = useSocket();
   
-  console.log('📊 App state:', { gameState: !!gameState, connected, viewMode, loadingTimeout });
+  console.log('📊 App state:', { gameState: !!gameState, connected, viewMode, sessionCode });
 
   // Add a timeout for loading state to prevent infinite loading
+  // Show pair code modal when received
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!gameState) {
-        console.warn('Game state not loaded after 10 seconds, showing fallback');
-        setLoadingTimeout(true);
-      }
-    }, 10000);
-
-    if (gameState) {
-      setLoadingTimeout(false);
-      clearTimeout(timer);
+    if (pairCode) {
+      console.log('📨 Pair code available in App, opening modal');
+      setShowPairCodeModal(true);
     }
-
-    return () => clearTimeout(timer);
-  }, [gameState]);
+  }, [pairCode]);
 
   useEffect(() => {
-    // Only auto-detect view mode after game has started
-    if (gameState?.gameStarted) {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isSmallScreen = window.innerWidth <= 768;
-      
-      if (isMobile || isSmallScreen) {
-        setViewMode('mobile');
-      } else {
-        setViewMode('scoreboard');
-      }
+    // Auto switch to mobile input after join
+    if (sessionCode && viewMode === 'menu') {
+      setViewMode('mobile');
     }
-  }, [gameState?.gameStarted]);
+  }, [sessionCode, viewMode]);
 
-  // Show popup when game is configured but not yet started
+  // Show popup when game is configured but not yet started (scoreboard only)
   useEffect(() => {
-    if (gameState && !gameState.gameStarted && gameState.settings.playerNames.length > 0) {
-      // Show popup when game is configured but not started
+    if (viewMode === 'scoreboard' && gameState && !gameState.gameStarted && gameState.settings.playerNames.length > 0) {
       if (!showLegStartPopup) {
         setShowLegStartPopup(true);
       }
     }
-  }, [gameState?.gameStarted, gameState?.settings, showLegStartPopup]);
+  }, [viewMode, gameState?.gameStarted, gameState?.settings, showLegStartPopup]);
 
   const handleStartGame = (settings: GameSettingsType) => {
     startGameWithSettings(settings);
-    // Auto-detect view mode after starting game
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isSmallScreen = window.innerWidth <= 768;
-    
-    if (isMobile || isSmallScreen) {
+    // If we're in a paired mobile session, remain on mobile; otherwise go to scoreboard
+    if (sessionCode) {
       setViewMode('mobile');
     } else {
       setViewMode('scoreboard');
     }
   };
 
-  const handleNewGame = () => {
-    setViewMode('settings');
+  const handleRestartMatch = () => {
     resetGame();
+    startGame();
+    // Keep current view mode; mobile stays mobile, scoreboard stays scoreboard
+  };
+
+  const handleChangeSettingsFromMobile = () => {
+    setViewMode('settings');
   };
 
   const handlePlayerSelected = (playerId: number) => {
@@ -84,98 +75,151 @@ function AppContent() {
     setShowLegStartPopup(false); // Hide the popup after selection
   };
 
-  if (!gameState && !loadingTimeout) {
+  // Show main menu when not in a session yet
+  if (viewMode === 'menu') {
     return (
-      <div className="min-h-screen bg-dart-dark flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-dart-gold mx-auto mb-4"></div>
-          <h2 className="text-2xl font-semibold text-white mb-4">Loading Dart Scorer...</h2>
-          <div className="text-sm text-gray-300 mb-4">
-            Connection Status: {connected ? '✅ Connected' : '❌ Connecting...'}
-          </div>
-          <div className="text-xs text-gray-400">
-            If this takes too long, please check your internet connection and refresh the page.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback when loading times out
-  if (!gameState && loadingTimeout) {
-    return (
-      <div className="min-h-screen bg-dart-dark flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-semibold text-white mb-4">Connection Issue</h2>
-          <p className="text-gray-300 mb-6">
-            Unable to connect to the game server. This might be due to network issues or server maintenance.
-          </p>
-          <div className="text-sm text-gray-400 mb-6">
-            Connection Status: {connected ? '✅ Connected' : '❌ Disconnected'}
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-dart-gold text-dart-dark px-6 py-3 rounded-lg font-semibold hover:bg-yellow-400 transition-colors"
-          >
-            Retry Connection
-          </button>
-        </div>
+      <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
+        <ConnectionStatus connected={connected} />
+        <MainMenu
+          onScoreboard={() => setViewMode('settings')}
+          onMobileScorer={() => setShowJoinModal(true)}
+        />
+        {showJoinModal && (
+          <JoinCodeModal
+            onSubmit={(code) => {
+              joinSession(code);
+              setShowJoinModal(false);
+            }}
+            onCancel={() => setShowJoinModal(false)}
+            error={sessionError || undefined}
+          />
+        )}
       </div>
     );
   }
 
   // Show victory screen if game is won
-  if (gameState.gameWon && gameState.winner) {
+  if (gameState && gameState.gameWon && gameState.winner) {
+    if (viewMode === 'scoreboard') {
+      return (
+        <VictoryScreen 
+          gameState={gameState}
+        />
+      );
+    }
+    // Mobile post-match controls
+    const winner = gameState.winner;
+    const winnerAvg = typeof winner.matchAverageScore === 'number' && winner.matchAverageScore > 0
+      ? winner.matchAverageScore
+      : (() => {
+          const validThrows = (winner.throws || []).filter(t => typeof t.score === 'number');
+          if (!validThrows.length) return 0;
+          const total = validThrows.reduce((sum, t) => sum + (t.score as number), 0);
+          return total / validThrows.length;
+        })();
     return (
-      <VictoryScreen 
-        gameState={gameState}
-        winner={gameState.winner}
-        onNewGame={handleNewGame}
+      <MobilePostMatch
+        winnerName={winner.name}
+        winnerAverage={winnerAvg}
+        onRestart={handleRestartMatch}
+        onChangeSettings={handleChangeSettingsFromMobile}
       />
     );
   }
 
   // Show settings if game hasn't started
-  if (!gameState.gameStarted) {
+  if (!gameState?.gameStarted && viewMode === 'settings') {
     return (
-      <div className="min-h-screen bg-dart-dark">
+      <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
         <ConnectionStatus connected={connected} />
+        {/* Back arrow to Main Menu */}
+        <div className="fixed top-4 left-4 z-50">
+          <button
+            onClick={() => setViewMode('menu')}
+            className="px-3 py-2 rounded-lg"
+            style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-background)' }}
+            aria-label="Back to Main Menu"
+          >
+            ← Back
+          </button>
+        </div>
         <GameSettings onStartGame={handleStartGame} />
+        {showPairCodeModal && pairCode && (
+          <PairCodeModal 
+            code={pairCode} 
+            masterCode={masterCode} 
+            onClose={() => {
+              setShowPairCodeModal(false);
+              // Ensure single-click start flow: move to scoreboard and prompt starting player
+              setViewMode('scoreboard');
+              if (gameState && !gameState.gameStarted) {
+                setShowLegStartPopup(true);
+              }
+            }} 
+          />
+        )}
+        {sessionError && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded shadow">{sessionError}</div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-dart-dark">
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
       <ConnectionStatus connected={connected} />
       
       {/* Hamburger Menu */}
       <HamburgerMenu viewMode={viewMode} onViewModeChange={setViewMode} />
 
-      {viewMode === 'settings' ? (
-        <GameSettings onStartGame={handleStartGame} />
-      ) : viewMode === 'scoreboard' ? (
-        <Scoreboard 
-          gameState={gameState}
-          onResetGame={resetGame}
-          onStartGame={startGame}
-        />
+      {viewMode === 'scoreboard' ? (
+        gameState ? (
+          <Scoreboard 
+            gameState={gameState}
+            onResetGame={resetGame}
+            onStartGame={startGame}
+          />
+        ) : (
+          <div className="text-center p-8" style={{ color: 'var(--color-text)' }}>Preparing game…</div>
+        )
       ) : (
-        <MobileInput 
-          gameState={gameState}
-          onSubmitScore={submitScore}
-          onUndoLastThrow={undoLastThrow}
-        />
+        gameState ? (
+          <MobileInput 
+            gameState={gameState}
+            onSubmitScore={submitScore}
+            onUndoLastThrow={undoLastThrow}
+          />
+        ) : (
+          <div className="text-center p-8" style={{ color: 'var(--color-text)' }}>Waiting to join session…</div>
+        )
       )}
 
       {/* Leg Start Popup */}
-      <LegStartPopup
-        gameState={gameState}
-        isVisible={showLegStartPopup}
-        onClose={() => setShowLegStartPopup(false)}
-        onPlayerSelected={handlePlayerSelected}
-      />
+      {viewMode === 'scoreboard' && gameState && (
+        <LegStartPopup
+          gameState={gameState}
+          isVisible={showLegStartPopup}
+          onClose={() => setShowLegStartPopup(false)}
+          onPlayerSelected={handlePlayerSelected}
+        />
+      )}
+
+      {/* Pair Code Modal should also be available in non-settings views */}
+      {showPairCodeModal && pairCode && (
+        <PairCodeModal 
+          code={pairCode} 
+          masterCode={masterCode} 
+          onClose={() => {
+            setShowPairCodeModal(false);
+            if (viewMode === 'scoreboard' && gameState && !gameState.gameStarted) {
+              setShowLegStartPopup(true);
+            }
+          }} 
+        />
+      )}
+      {sessionError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded shadow">{sessionError}</div>
+      )}
     </div>
   );
 }

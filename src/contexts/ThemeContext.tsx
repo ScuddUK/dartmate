@@ -24,15 +24,9 @@ interface ThemeProviderProps {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [currentTheme, setCurrentTheme] = useState<Theme>(defaultTheme);
 
-  // Load theme from localStorage on mount
+  // Monochrome default: no theme switching/persistence
   useEffect(() => {
-    const savedThemeId = localStorage.getItem('dartscorer-theme');
-    if (savedThemeId) {
-      const savedTheme = themes.find(theme => theme.id === savedThemeId);
-      if (savedTheme) {
-        setCurrentTheme(savedTheme);
-      }
-    }
+    setCurrentTheme(defaultTheme);
   }, []);
 
   // Apply theme colors to CSS custom properties
@@ -51,11 +45,13 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     root.style.setProperty('--color-warning', colors.warning);
     root.style.setProperty('--color-error', colors.error);
     root.style.setProperty('--color-border', colors.border);
+    // Provide a subtle alpha variant for highlighting current player/panels
+    root.style.setProperty('--color-primary-alpha', 'rgba(17, 17, 17, 0.08)');
   }, [currentTheme]);
 
   const setTheme = (theme: Theme) => {
-    setCurrentTheme(theme);
-    localStorage.setItem('dartscorer-theme', theme.id);
+    // No-op: theme switching disabled
+    setCurrentTheme(defaultTheme);
   };
 
   return (

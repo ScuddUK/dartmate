@@ -8,6 +8,10 @@ export interface Player {
   throws: ThrowRecord[];
   isBot?: boolean;
   botSkillLevel?: number;
+  // Match-long cumulative stats
+  totalScore?: number;
+  totalThrows?: number;
+  matchAverageScore?: number;
 }
 
 export interface ThrowRecord {

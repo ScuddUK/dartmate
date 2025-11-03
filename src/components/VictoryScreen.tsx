@@ -4,10 +4,9 @@ import { useTheme } from '../contexts/ThemeContext';
 
 interface VictoryScreenProps {
   gameState: GameState;
-  onNewGame: () => void;
 }
 
-export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGame }) => {
+export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
   const { currentTheme } = useTheme();
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -30,8 +29,11 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
     (prev.legsWon > current.legsWon) ? prev : current
   );
 
-  // Calculate total average for the winner
+  // Prefer match-long average if available; fallback to per-throw calc
   const calculateTotalAverage = (player: Player): number => {
+    if (typeof player.matchAverageScore === 'number' && player.matchAverageScore > 0) {
+      return player.matchAverageScore;
+    }
     if (player.throws.length === 0) return 0;
     const validThrows = player.throws.filter(throwRecord => 
       typeof throwRecord.score === 'number' && throwRecord.score >= 0
@@ -150,19 +152,7 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onNewGa
             </div>
           </div>
 
-          {/* Start New Game Button */}
-          <button
-            onClick={onNewGame}
-            className="text-white font-bold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-            style={{ 
-               ...styles.button,
-               backgroundColor: 'var(--color-primary)'
-             }}
-             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-secondary)'}
-             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary)'}
-          >
-            🎯 Start New Game
-          </button>
+          {/* Scoreboard should not provide restart controls */}
         </div>
       </div>
     </div>

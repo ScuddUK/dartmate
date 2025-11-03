@@ -79,7 +79,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
   const contextButtonProps = getContextButtonProps();
 
   return (
-    <div className="min-h-screen bg-dart-dark text-white flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text)' }}>
       {/* Game Status */}
       {!gameState.gameStarted && (
         <div className="text-center py-4 flex-shrink-0">
@@ -95,7 +95,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <div className="text-3xl font-bold mb-2" style={{ color: 'var(--color-primary)' }}>
             {currentPlayer?.name}
           </div>
-          <div className="font-score text-5xl font-bold mb-2 text-white">
+          <div className="font-score text-5xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
             {inputScore || '0'}
           </div>
           <div className="text-lg text-gray-400">
@@ -112,8 +112,8 @@ const MobileInput: React.FC<MobileInputProps> = ({
             <button
               key={num}
               onClick={() => handleNumberInput(num.toString())}
-              className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
-              style={{ backgroundColor: 'var(--color-primary)' }}
+              className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+              style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
             >
               {num}
             </button>
@@ -123,23 +123,23 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <button
             onClick={handleContextButton}
             disabled={contextButtonProps.disabled}
-            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-all duration-200 border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ backgroundColor: contextButtonProps.bgColor }}
+            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-all duration-200 rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
           >
             {contextButtonProps.text}
           </button>
           <button
             onClick={() => handleNumberInput('0')}
-            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform border border-dart-dark rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
-            style={{ backgroundColor: 'var(--color-primary)' }}
+            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+            style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
           >
             0
           </button>
           <button
             onClick={handleSubmit}
             disabled={!isValidScore() || !gameState.gameStarted}
-            className="aspect-square text-white text-xl font-bold active:scale-95 transition-transform border border-dart-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
-            style={{ backgroundColor: 'var(--color-accent)' }}
+            className="aspect-square text-white text-xl font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
+            style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
           >
             ✓
           </button>
