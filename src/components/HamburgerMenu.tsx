@@ -18,7 +18,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
   };
 
   return (
-    <div className="fixed top-4 right-4 z-50">
+    <div className="fixed top-4 right-4 z-[100]">
       {/* Hamburger Button */}
       <button
         onClick={toggleMenu}
@@ -38,13 +38,13 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ viewMode, onViewModeChang
         <>
           {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black bg-opacity-20 z-40"
+            className="fixed inset-0 bg-black bg-opacity-20 z-[90]"
             onClick={() => setIsOpen(false)}
           ></div>
           
           {/* Menu Items */}
           <div
-            className="absolute top-16 right-0 rounded-lg shadow-xl overflow-hidden z-50 min-w-48"
+            className="absolute top-16 right-0 rounded-lg shadow-xl overflow-hidden z-[100] min-w-48"
             style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
           >
             <button

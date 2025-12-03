@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameState } from '../types/game';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -15,6 +15,9 @@ const MobileInput: React.FC<MobileInputProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const [inputScore, setInputScore] = useState('');
+  const gridWrapRef = useRef<HTMLDivElement>(null);
+  const [btnSize, setBtnSize] = useState<number>(80);
+  const [fonts, setFonts] = useState<{ name: number; score: number; info: number; btn: number }>({ name: 24, score: 40, info: 16, btn: 24 });
 
   // Always use the current player from game state for automatic alternation
   const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
@@ -24,6 +27,42 @@ const MobileInput: React.FC<MobileInputProps> = ({
     // Clear input when player changes
     setInputScore('');
   }, [gameState.currentPlayer]);
+
+  useEffect(() => {
+    let rafId: number | null = null;
+    const recalc = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const wrap = gridWrapRef.current;
+        if (!wrap) return;
+        const rect = wrap.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        const gap = 8; // Tailwind gap-2
+        const cols = 3;
+        const rows = 4;
+        const byWidth = Math.floor((width - gap * (cols - 1)) / cols);
+        const byHeight = Math.floor((height - gap * (rows - 1)) / rows);
+        const size = Math.max(56, Math.min(byWidth, byHeight));
+        setBtnSize(size);
+        const nameSize = Math.max(18, Math.floor(size * 0.28));
+        const scoreSize = Math.max(24, Math.floor(size * 0.46));
+        const infoSize = Math.max(14, Math.floor(size * 0.18));
+        const btnText = Math.max(18, Math.floor(size * 0.34));
+        setFonts({ name: nameSize, score: scoreSize, info: infoSize, btn: btnText });
+      });
+    };
+    recalc();
+    const onResize = () => recalc();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   const handleNumberInput = (num: string) => {
     if (inputScore.length < 3) {
@@ -92,28 +131,28 @@ const MobileInput: React.FC<MobileInputProps> = ({
       {/* Current Player Display - Compact */}
       <div className="text-center py-4 flex-shrink-0">
         <div className="dart-display p-4 rounded-xl mx-4">
-          <div className="text-3xl font-bold mb-2" style={{ color: 'var(--color-primary)' }}>
+          <div className="font-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: fonts.name }}>
             {currentPlayer?.name}
           </div>
-          <div className="font-score text-5xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
+          <div className="font-score font-bold mb-2" style={{ color: 'var(--color-text)', fontSize: fonts.score }}>
             {inputScore || '0'}
           </div>
-          <div className="text-lg text-gray-400">
+          <div className="text-gray-400" style={{ fontSize: fonts.info }}>
             Remaining: <span className="font-main-score">{currentPlayer?.score}</span> points
           </div>
         </div>
       </div>
 
       {/* Number Pad - Dynamically Scaled for Touch */}
-      <div className="flex-1 flex flex-col justify-center px-4 pb-4">
+      <div ref={gridWrapRef} className="flex-1 flex flex-col justify-center px-4 pb-4">
         {/* Calculate dynamic button size based on screen width */}
         <div className="grid grid-cols-3 gap-2 w-full max-w-sm mx-auto">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleNumberInput(num.toString())}
-              className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
-              style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+              className="text-white font-bold active:scale-95 transition-transform rounded-lg flex items-center justify-center"
+              style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
             >
               {num}
             </button>
@@ -123,23 +162,23 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <button
             onClick={handleContextButton}
             disabled={contextButtonProps.disabled}
-            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-all duration-200 rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+            className="text-white font-bold active:scale-95 transition-all duration-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
           >
             {contextButtonProps.text}
           </button>
           <button
             onClick={() => handleNumberInput('0')}
-            className="aspect-square text-white text-2xl font-bold active:scale-95 transition-transform rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
-            style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+            className="text-white font-bold active:scale-95 transition-transform rounded-lg flex items-center justify-center"
+            style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
           >
             0
           </button>
           <button
             onClick={handleSubmit}
             disabled={!isValidScore() || !gameState.gameStarted}
-            className="aspect-square text-white text-xl font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed rounded-lg min-h-[60px] sm:min-h-[70px] md:min-h-[80px]"
-            style={{ backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+            className="text-white font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-center"
+            style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
           >
             ✓
           </button>
