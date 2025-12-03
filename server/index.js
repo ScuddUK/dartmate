@@ -463,8 +463,48 @@ io.on('connection', (socket) => {
     addClientToSession(code, socket.id);
     socket.join(code);
     socket.emit('sessionJoined', { code });
-    socket.emit('gameState', session.gameState);
+    // Auto-start the game upon successful pairing
+    const sGameState = session.gameState;
+    sGameState.gameStarted = true;
+    sGameState.currentPlayer = sGameState.legStartingPlayer;
+    socket.emit('gameState', sGameState);
+    io.to(code).emit('gameState', sGameState);
     io.to(code).emit('connectionStatus', { status: 'client_joined', code, clients: session.clients.size });
+
+    // If starting player is a bot, let them throw first
+    const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+    if (startingPlayer && startingPlayer.isBot) {
+      setTimeout(() => {
+        const avg = sGameState.settings.dartBot?.averageScore ?? 50;
+        const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
+        const previousScore = startingPlayer.score;
+        const newScore = previousScore - turnScore;
+
+        const throwDetails = {
+          score: turnScore,
+          playerId: startingPlayer.id,
+          timestamp: new Date(),
+          previousScore,
+          remainingScore: Math.max(newScore, 0)
+        };
+
+        sGameState.throwHistory.push(throwDetails);
+        if (newScore < 0 || newScore === 1) {
+          io.to(code).emit('bust', { playerId: startingPlayer.id });
+        } else if (newScore === 0) {
+          sGameState.gameWon = true;
+          sGameState.winner = startingPlayer;
+          startingPlayer.score = 0;
+          io.to(code).emit('gameWon', { winner: startingPlayer });
+        } else {
+          startingPlayer.score = newScore;
+        }
+
+        // Switch to next player
+        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+        io.to(code).emit('gameState', sGameState);
+      }, 1000);
+    }
   });
 
   // Set starting player within a session and start the match
@@ -524,6 +564,156 @@ io.on('connection', (socket) => {
           io.to(code).emit('gameState', sGameState);
         }, 1000);
       }
+    }
+  });
+
+  // Reset game within a specific session (paired mobile/scoreboard flow)
+  socket.on('resetGameInSession', ({ code }) => {
+    const session = getSession(code);
+    if (!session) {
+      socket.emit('sessionError', { error: 'Session not found.' });
+      return;
+    }
+    const sGameState = session.gameState;
+    const start = sGameState.settings?.startingScore || 501;
+    sGameState.players.forEach(player => {
+      player.score = start;
+      player.legsWon = 0;
+      player.setsWon = 0;
+      player.throws = [];
+      player.averageScore = 0;
+      player.totalScore = 0;
+      player.totalThrows = 0;
+      player.matchAverageScore = 0;
+    });
+    sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
+    sGameState.legStartingPlayer = sGameState.legStartingPlayer || 1;
+    sGameState.currentLeg = 1;
+    sGameState.currentSet = 1;
+    sGameState.gameStarted = false;
+    sGameState.gameWon = false;
+    sGameState.winner = undefined;
+    sGameState.throwHistory = [];
+    // Auto-start immediately after reset
+    sGameState.gameStarted = true;
+    sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
+    io.to(code).emit('gameState', sGameState);
+
+    // If starting player is a bot, let them throw first
+    const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+    if (startingPlayer && startingPlayer.isBot) {
+      setTimeout(() => {
+        const avg = sGameState.settings.dartBot?.averageScore ?? 50;
+        const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
+        const previousScore = startingPlayer.score;
+        const newScore = previousScore - turnScore;
+
+        const throwDetails = {
+          score: turnScore,
+          playerId: startingPlayer.id,
+          timestamp: new Date(),
+          previousScore,
+          remainingScore: Math.max(newScore, 0)
+        };
+
+        sGameState.throwHistory.push(throwDetails);
+        if (newScore < 0 || newScore === 1) {
+          io.to(code).emit('bust', { playerId: startingPlayer.id });
+        } else if (newScore === 0) {
+          sGameState.gameWon = true;
+          sGameState.winner = startingPlayer;
+          startingPlayer.score = 0;
+          io.to(code).emit('gameWon', { winner: startingPlayer });
+        } else {
+          startingPlayer.score = newScore;
+        }
+
+        // Switch to next player
+        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+        io.to(code).emit('gameState', sGameState);
+      }, 1000);
+    }
+  });
+
+  // Update settings within a session and restart the match
+  socket.on('updateSettingsInSession', ({ code, settings }) => {
+    const session = getSession(code);
+    if (!session) {
+      socket.emit('sessionError', { error: 'Session not found.' });
+      return;
+    }
+    const sGameState = session.gameState;
+
+    // Merge new settings
+    sGameState.settings = { ...sGameState.settings, ...settings };
+
+    // Apply player names and reset player stats
+    const start = sGameState.settings?.startingScore || 501;
+    sGameState.players.forEach((player, idx) => {
+      player.name = (sGameState.settings.playerNames && sGameState.settings.playerNames[idx]) || player.name;
+      player.score = start;
+      player.legsWon = 0;
+      player.setsWon = 0;
+      player.throws = [];
+      player.averageScore = 0;
+      player.totalScore = 0;
+      player.totalThrows = 0;
+      player.matchAverageScore = 0;
+      player.isBot = false;
+    });
+
+    // Configure DartBot for the session if enabled
+    if (sGameState.settings.dartBot?.enabled) {
+      session.dartBotInstances[2] = new SimpleDartBot(sGameState.settings.dartBot.skillLevel);
+      sGameState.players[1].isBot = true;
+    } else {
+      session.dartBotInstances[2] = null;
+      sGameState.players[1].isBot = false;
+    }
+
+    // Reset match state and auto-start
+    sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
+    sGameState.currentLeg = 1;
+    sGameState.currentSet = 1;
+    sGameState.gameStarted = true;
+    sGameState.gameWon = false;
+    sGameState.winner = undefined;
+    sGameState.throwHistory = [];
+    io.to(code).emit('gameState', sGameState);
+
+    // If starting player is a bot, perform initial bot throw
+    const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+    if (startingPlayer && startingPlayer.isBot) {
+      setTimeout(() => {
+        const avg = sGameState.settings.dartBot?.averageScore ?? 50;
+        const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
+        const previousScore = startingPlayer.score;
+        const newScore = previousScore - turnScore;
+
+        const throwDetails = {
+          score: turnScore,
+          playerId: startingPlayer.id,
+          timestamp: new Date(),
+          previousScore,
+          remainingScore: Math.max(newScore, 0)
+        };
+
+        sGameState.throwHistory.push(throwDetails);
+        if (newScore < 0 || newScore === 1) {
+          io.to(code).emit('bust', { playerId: startingPlayer.id });
+        } else if (newScore === 0) {
+          sGameState.gameWon = true;
+          sGameState.winner = startingPlayer;
+          startingPlayer.score = 0;
+          io.to(code).emit('gameWon', { winner: startingPlayer });
+        } else {
+          startingPlayer.score = newScore;
+        }
+
+        // Switch to next player
+        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+        io.to(code).emit('gameState', sGameState);
+      }, 1000);
     }
   });
 
@@ -698,6 +888,45 @@ io.on('connection', (socket) => {
     updatePlayerAverage(player);
     sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
     io.to(code).emit('gameState', sGameState);
+  });
+
+  // Undo last throw within a specific session
+  socket.on('undoLastThrowInSession', ({ code }) => {
+    const session = getSession(code);
+    if (!session) {
+      socket.emit('sessionError', { error: 'Session not found.' });
+      return;
+    }
+    const sGameState = session.gameState;
+    if (sGameState.throwHistory.length > 0) {
+      const lastThrow = sGameState.throwHistory.pop();
+      const player = sGameState.players.find(p => p.id === lastThrow.playerId);
+      if (player) {
+        // Restore player's score
+        player.score = lastThrow.previousScore;
+        // Remove from player's individual history
+        const idx = player.throws.findIndex(t => {
+          const txTs = (t.timestamp instanceof Date) ? t.timestamp.getTime() : new Date(t.timestamp).getTime();
+          const lastTs = (lastThrow.timestamp instanceof Date) ? lastThrow.timestamp.getTime() : new Date(lastThrow.timestamp).getTime();
+          return txTs === lastTs && t.score === lastThrow.score;
+        });
+        if (idx !== -1) {
+          player.throws.splice(idx, 1);
+        }
+        // Adjust totals if this was a numeric score
+        if (typeof lastThrow.score === 'number') {
+          player.totalThrows = Math.max(0, (player.totalThrows || 0) - 1);
+          player.totalScore = Math.max(0, (player.totalScore || 0) - lastThrow.score);
+          const denom = player.totalThrows || 1;
+          player.matchAverageScore = Math.round(((player.totalScore || 0) / denom) * 100) / 100;
+        }
+        // Update average
+        updatePlayerAverage(player);
+        // Set current player back to the one who made the undone throw
+        sGameState.currentPlayer = lastThrow.playerId;
+        io.to(code).emit('gameState', sGameState);
+      }
+    }
   });
 
   // Handle player name updates

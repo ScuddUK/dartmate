@@ -24,10 +24,8 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
     };
   }, []);
 
-  // Find the winner
-  const winner = gameState.players.reduce((prev, current) => 
-    (prev.legsWon > current.legsWon) ? prev : current
-  );
+  // Use the server-provided winner to avoid mismatches
+  const winner: Player = (gameState.winner as Player) || gameState.players[0];
 
   // Prefer match-long average if available; fallback to per-throw calc
   const calculateTotalAverage = (player: Player): number => {
@@ -101,9 +99,9 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
   const styles = getDynamicStyles();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dart-dark via-gray-900 to-black text-white flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
       <div 
-        className="text-center w-full max-w-4xl"
+        className="text-center w-full max-w-4xl bg-white"
         style={styles.container}
       >
         
@@ -115,13 +113,13 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
           >
             <h1 
               className="font-bold mr-4"
-              style={{ ...styles.titleText, color: 'var(--color-primary)' }}
+              style={{ ...styles.titleText, color: '#000000' }}
             >
               WINNER
             </h1>
             <h2 
-              className="font-bold text-white mr-4"
-              style={styles.titleText}
+              className="font-bold mr-4"
+              style={{ ...styles.titleText, color: '#000000' }}
             >
               {winner.name}
             </h2>
@@ -132,20 +130,21 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
 
           {/* Total Average Section */}
           <div 
-            className="bg-gray-800 rounded-xl text-center"
-            style={{ ...styles.cardPadding, ...styles.spacing }}
+            className="rounded-xl text-center bg-white border"
+            style={{ ...styles.cardPadding, ...styles.spacing, borderColor: '#000000' }}
           >
             <h3 
               className="font-bold"
-              style={{ ...styles.sectionTitle, marginBottom: `${Math.max(6, 12 * spacingScale)}px`, color: 'var(--color-primary)' }}
+              style={{ ...styles.sectionTitle, marginBottom: `${Math.max(6, 12 * spacingScale)}px`, color: '#000000' }}
             >
               Total Average
             </h3>
             <div 
-              className="font-score font-bold text-green-400"
+              className="font-score font-bold"
               style={{ 
                 fontSize: `${Math.max(32, 64 * textScale)}px`,
-                lineHeight: '1'
+                lineHeight: '1',
+                color: '#000000'
               }}
             >
               {winnerAverage.toFixed(1)}

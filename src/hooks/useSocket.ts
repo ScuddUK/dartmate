@@ -102,8 +102,9 @@ export const useSocket = () => {
       });
     });
     
+    // Bust should be recorded in history without popups
     newSocket.on('bust', (data) => {
-      alert(`Player ${data.playerId} went bust!`);
+      console.log(`Bust: player ${data.playerId}`);
     });
     
     setSocket(newSocket);
@@ -126,13 +127,21 @@ export const useSocket = () => {
 
   const undoLastThrow = () => {
     if (socket) {
-      socket.emit('undoLastThrow');
+      if (sessionCode) {
+        socket.emit('undoLastThrowInSession', { code: sessionCode });
+      } else {
+        socket.emit('undoLastThrow');
+      }
     }
   };
 
   const resetGame = () => {
     if (socket) {
-      socket.emit('resetGame');
+      if (sessionCode) {
+        socket.emit('resetGameInSession', { code: sessionCode });
+      } else {
+        socket.emit('resetGame');
+      }
     }
   };
 
@@ -155,6 +164,18 @@ export const useSocket = () => {
     }
   };
 
+  // Apply settings mid-match and restart the session or start new if unpaired
+  const applySettingsAndRestart = (settings: GameSettings) => {
+    if (socket) {
+      if (sessionCode) {
+        socket.emit('updateSettingsInSession', { code: sessionCode, settings });
+      } else {
+        // No session yet; start a new game with these settings
+        socket.emit('startGameWithSettings', settings);
+      }
+    }
+  };
+
   const joinSession = (code: string) => {
     if (socket) {
       socket.emit('joinSession', { code });
@@ -165,6 +186,12 @@ export const useSocket = () => {
     if (socket) {
       console.log('🔁 Requesting pair code re-emit');
       socket.emit('requestPairCode');
+    }
+  };
+
+  const requestGameState = () => {
+    if (socket) {
+      socket.emit('requestGameState');
     }
   };
 
@@ -192,8 +219,10 @@ export const useSocket = () => {
     startGame,
     updatePlayerName,
     startGameWithSettings,
+    applySettingsAndRestart,
     setStartingPlayer,
     joinSession,
     requestPairCode
+    ,requestGameState
   };
 };

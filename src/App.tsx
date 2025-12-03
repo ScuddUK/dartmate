@@ -21,7 +21,8 @@ function AppContent() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showLegStartPopup, setShowLegStartPopup] = useState(false);
   const [lastLegNumber, setLastLegNumber] = useState(1);
-  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings, setStartingPlayer, pairCode, masterCode, joinSession, sessionError, sessionCode } = useSocket();
+  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings, applySettingsAndRestart, setStartingPlayer, pairCode, masterCode, joinSession, sessionError, sessionCode, connectionStatus, requestGameState } = useSocket();
+  // connectionStatus is provided by the socket hook; used to auto-close pairing modal
   
   console.log('📊 App state:', { gameState: !!gameState, connected, viewMode, sessionCode });
 
@@ -41,29 +42,49 @@ function AppContent() {
     }
   }, [sessionCode, viewMode]);
 
-  // Show popup when game is configured but not yet started (scoreboard only)
+  // If scoreboard is visible but no game state yet, request it
   useEffect(() => {
-    if (viewMode === 'scoreboard' && gameState && !gameState.gameStarted && gameState.settings.playerNames.length > 0) {
-      if (!showLegStartPopup) {
-        setShowLegStartPopup(true);
-      }
+    if (viewMode === 'scoreboard' && !gameState) {
+      requestGameState();
     }
-  }, [viewMode, gameState?.gameStarted, gameState?.settings, showLegStartPopup]);
+  }, [viewMode, gameState]);
+
+  // Close PairCodeModal automatically when a client joins the session
+  useEffect(() => {
+    if (connectionStatus?.status === 'client_joined' && showPairCodeModal) {
+      setShowPairCodeModal(false);
+    }
+  }, [connectionStatus, showPairCodeModal]);
+
+  // Show starting player selection on mobile after pairing, before any throws
+  useEffect(() => {
+    if (
+      viewMode === 'mobile' &&
+      gameState &&
+      !gameState.gameStarted &&
+      sessionCode &&
+      !showLegStartPopup
+    ) {
+      setShowLegStartPopup(true);
+    }
+  }, [viewMode, gameState?.gameStarted, sessionCode, showLegStartPopup]);
 
   const handleStartGame = (settings: GameSettingsType) => {
-    startGameWithSettings(settings);
-    // If we're in a paired mobile session, remain on mobile; otherwise go to scoreboard
+    // Apply settings and restart if paired; otherwise start new game/session
+    applySettingsAndRestart(settings);
+    // Preserve view context: paired mobile stays mobile; otherwise go to scoreboard
     if (sessionCode) {
       setViewMode('mobile');
     } else {
       setViewMode('scoreboard');
+      // Proactively request game state so the scoreboard doesn't hang
+      requestGameState();
     }
   };
 
   const handleRestartMatch = () => {
+    // Only reset; scoreboard or mobile will explicitly start next match to avoid loops
     resetGame();
-    startGame();
-    // Keep current view mode; mobile stays mobile, scoreboard stays scoreboard
   };
 
   const handleChangeSettingsFromMobile = () => {
@@ -72,7 +93,7 @@ function AppContent() {
 
   const handlePlayerSelected = (playerId: number) => {
     setStartingPlayer(playerId);
-    setShowLegStartPopup(false); // Hide the popup after selection
+    setShowLegStartPopup(false);
   };
 
   // Show main menu when not in a session yet
@@ -127,8 +148,8 @@ function AppContent() {
     );
   }
 
-  // Show settings if game hasn't started
-  if (!gameState?.gameStarted && viewMode === 'settings') {
+  // Show settings whenever requested
+  if (viewMode === 'settings') {
     return (
       <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
         <ConnectionStatus connected={connected} />
@@ -150,11 +171,7 @@ function AppContent() {
             masterCode={masterCode} 
             onClose={() => {
               setShowPairCodeModal(false);
-              // Ensure single-click start flow: move to scoreboard and prompt starting player
-              setViewMode('scoreboard');
-              if (gameState && !gameState.gameStarted) {
-                setShowLegStartPopup(true);
-              }
+              // Keep current view; starter selection happens on mobile after game starts
             }} 
           />
         )}
@@ -171,6 +188,13 @@ function AppContent() {
       
       {/* Hamburger Menu */}
       <HamburgerMenu viewMode={viewMode} onViewModeChange={setViewMode} />
+
+      {/* Pair code badge (top-left) remains visible on scoreboard */}
+      {viewMode === 'scoreboard' && pairCode && (
+        <div className="fixed top-4 left-4 z-50 px-3 py-2 rounded-lg shadow" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
+          Pair Code: <span className="font-mono font-bold">{pairCode}</span>
+        </div>
+      )}
 
       {viewMode === 'scoreboard' ? (
         gameState ? (
@@ -194,8 +218,8 @@ function AppContent() {
         )
       )}
 
-      {/* Leg Start Popup */}
-      {viewMode === 'scoreboard' && gameState && (
+      {/* Leg Start Popup on mobile only */}
+      {viewMode === 'mobile' && gameState && (
         <LegStartPopup
           gameState={gameState}
           isVisible={showLegStartPopup}
@@ -211,9 +235,7 @@ function AppContent() {
           masterCode={masterCode} 
           onClose={() => {
             setShowPairCodeModal(false);
-            if (viewMode === 'scoreboard' && gameState && !gameState.gameStarted) {
-              setShowLegStartPopup(true);
-            }
+            // Starter selection now occurs on mobile after game start
           }} 
         />
       )}

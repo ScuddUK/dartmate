@@ -24,12 +24,13 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
   const handleCoinToss = () => {
     setIsFlipping(true);
     
-    // Simulate coin flip animation
+    // Simulate coin flip animation then start immediately
     setTimeout(() => {
       const randomPlayer = Math.random() < 0.5 ? 1 : 2;
-      setSelectedPlayer(randomPlayer);
+      onPlayerSelected(randomPlayer);
       setIsFlipping(false);
-    }, 1000);
+      onClose();
+    }, 800);
   };
 
   const handleStartLeg = () => {
@@ -57,7 +58,7 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
             {gameState.players.map((player) => (
               <button
                 key={player.id}
-                onClick={() => setSelectedPlayer(player.id)}
+                onClick={() => { onPlayerSelected(player.id); onClose(); }}
                 className={`flex-1 p-4 rounded-lg border-2 transition-all ${
                   selectedPlayer === player.id
                     ? 'border-blue-600 bg-blue-50 text-blue-800'
@@ -92,18 +93,12 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex">
           <button
             onClick={onClose}
             className="flex-1 bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 transition-colors"
           >
             Cancel
-          </button>
-          <button
-            onClick={handleStartLeg}
-            className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-          >
-            Start Match
           </button>
         </div>
       </div>
