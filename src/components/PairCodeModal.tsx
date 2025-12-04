@@ -2,11 +2,10 @@ import React from 'react';
 
 interface PairCodeModalProps {
   code: string;
-  masterCode?: string | null;
   onClose: () => void;
 }
 
-const PairCodeModal: React.FC<PairCodeModalProps> = ({ code, masterCode, onClose }) => {
+const PairCodeModal: React.FC<PairCodeModalProps> = ({ code, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" role="dialog" aria-modal="true">
       <div className="bg-white text-black rounded-lg shadow-xl w-full max-w-md p-6">
@@ -25,21 +24,9 @@ const PairCodeModal: React.FC<PairCodeModalProps> = ({ code, masterCode, onClose
             Copy Player Code
           </button>
         </div>
-        {masterCode && (
-          <div className="flex items-center justify-between bg-gray-100 rounded-md p-4 mb-4">
-            <span className="font-mono text-xl tracking-widest">Admin: {masterCode}</span>
-            <button
-              className="ml-4 px-3 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-              onClick={() => navigator.clipboard.writeText(masterCode)}
-            >
-              Copy Admin Code
-            </button>
-          </div>
-        )}
         <ul className="text-sm text-gray-600 list-disc pl-5 mb-4">
           <li>On the mobile device, tap "Mobile Scorer" and enter this code.</li>
           <li>The code is 8 characters, letters and numbers only.</li>
-          <li>Admin code grants elevated access; do not share publicly.</li>
         </ul>
         <button
           className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"

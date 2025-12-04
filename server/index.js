@@ -8,9 +8,10 @@ import sessionManager, { createSession, getSession, addClientToSession, removeCl
 
 // Simple DartBot implementation for server
 class SimpleDartBot {
-  constructor(skillLevel) {
+  constructor(skillLevel, targetAverage = null) {
     this.skillLevel = skillLevel;
-    this.averageScore = 20 + (skillLevel - 1) * 10; // 20-110 range
+    // Use provided target average if set; otherwise derive from skill level
+    this.averageScore = typeof targetAverage === 'number' ? targetAverage : (20 + (skillLevel - 1) * 10); // 20-110 range
     this.accuracy = Math.min(0.3 + (skillLevel - 1) * 0.07, 0.95); // 30% to 95%
     this.doubleAccuracy = Math.min(0.1 + (skillLevel - 1) * 0.05, 0.6); // 10% to 60%
     this.tripleAccuracy = Math.min(0.05 + (skillLevel - 1) * 0.03, 0.4); // 5% to 40%
@@ -31,142 +32,186 @@ class SimpleDartBot {
 
   // Generate a dart specifically for finishing the game
   generateFinishingDart(remainingScore) {
-    // For finishing, we need to hit exactly the remaining score with a double
+    // Double-out finishing: try exact even <= 40 first
     if (remainingScore % 2 === 0 && remainingScore <= 40 && remainingScore >= 2) {
       const targetSegment = remainingScore / 2;
-      
-      // Attempt the double finish based on skill
-      if (Math.random() < this.doubleAccuracy * 1.5) { // Boost finish accuracy slightly
-        return {
-          score: remainingScore,
-          segment: targetSegment,
-          multiplier: 2,
-          isDouble: true,
-          isMiss: false,
-          isTriple: false,
-          isBull: false
-        };
-      } else {
-        // Missed the double, hit the single instead
-        return {
-          score: targetSegment,
-          segment: targetSegment,
-          multiplier: 1,
-          isDouble: false,
-          isMiss: false,
-          isTriple: false,
-          isBull: false
-        };
-      }
-    } else if (remainingScore === 50) {
-      // Try for bull finish
-      const bullAccuracy = Math.min(0.4, this.doubleAccuracy * 2);
-      if (Math.random() < bullAccuracy) {
-        return {
-          score: 50,
-          segment: 25,
-          multiplier: 2,
-          isDouble: true,
-          isBull: true,
-          isMiss: false,
-          isTriple: false
-        };
-      } else {
-        // Missed bull, hit outer bull
-        return {
-          score: 25,
-          segment: 25,
-          multiplier: 1,
-          isDouble: false,
-          isBull: true,
-          isMiss: false,
-          isTriple: false
-        };
-      }
-    } else {
-      // Can't finish this turn, throw a setup dart
-      // Aim for a score that leaves an even number for next turn
-      const setupTarget = Math.min(60, Math.max(20, remainingScore - 40));
-      return this.generateRealisticDart(setupTarget);
+      const hit = Math.random() < (this.doubleAccuracy * 1.5);
+      return {
+        score: hit ? remainingScore : targetSegment,
+        segment: targetSegment,
+        multiplier: hit ? 2 : 1,
+        isDouble: hit,
+        isMiss: false,
+        isTriple: false,
+        isBull: false
+      };
     }
+    // 50 finish via inner bull only when exactly 50 remains
+    if (remainingScore === 50) {
+      const bullAccuracy = Math.min(0.45, this.doubleAccuracy * 2);
+      const innerHit = Math.random() < bullAccuracy;
+      return {
+        score: innerHit ? 50 : 25,
+        segment: 25,
+        multiplier: innerHit ? 2 : 1,
+        isDouble: innerHit,
+        isBull: true,
+        isMiss: false,
+        isTriple: false
+      };
+    }
+    // If in classic checkout range (>40 up to 170), attempt first-dart route
+    if (remainingScore > 40 && remainingScore <= 170) {
+      // 1) Try a treble that leaves a clean 2-dart finish (even <=40 or 50)
+      const treblePrefs = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10];
+      for (const seg of treblePrefs) {
+        const rem = remainingScore - 3 * seg;
+        if (rem === 50 || (rem % 2 === 0 && rem >= 2 && rem <= 40)) {
+          // Aim this treble
+          const adj = this.getAdjacentSegments(seg);
+          if (Math.random() < this.tripleAccuracy) {
+            return {
+              score: 3 * seg,
+              segment: seg,
+              multiplier: 3,
+              isTriple: true,
+              isDouble: false,
+              isBull: false,
+              isMiss: false
+            };
+          }
+          // Miss treble: try to salvage single
+          const hitSegment = Math.random() < this.accuracy ? seg : adj[Math.floor(Math.random() * adj.length)];
+          return {
+            score: hitSegment,
+            segment: hitSegment,
+            multiplier: 1,
+            isTriple: false,
+            isDouble: false,
+            isBull: false,
+            isMiss: false
+          };
+        }
+      }
+
+      // 2) For 41–50, try to leave D16 (32), D20 (40), or 50 (bull)
+      if (remainingScore >= 41 && remainingScore <= 50) {
+        const singlesPref = [25, 9, 11, 12, 13, 19, 17, 15, 7, 1, 20, 18, 16, 14, 10, 8, 6, 4, 3, 2, 5];
+        let pick = null;
+        for (const s of singlesPref) {
+          const rem = remainingScore - s;
+          if (rem === 50 || (rem % 2 === 0 && rem >= 2 && rem <= 40)) {
+            pick = s;
+            break;
+          }
+        }
+        if (pick != null) {
+          const adj = this.getAdjacentSegments(pick);
+          const hitSegment = Math.random() < this.accuracy ? pick : adj[Math.floor(Math.random() * adj.length)];
+          const isBull = pick === 25;
+          return {
+            score: hitSegment,
+            segment: isBull ? 25 : hitSegment,
+            multiplier: isBull ? 1 : 1,
+            isBull: isBull,
+            isDouble: false,
+            isTriple: false,
+            isMiss: false
+          };
+        }
+      }
+
+      // 3) Otherwise, aim T20 to reduce to a standard two-dart zone
+      const seg = 20;
+      const adj = this.getAdjacentSegments(seg);
+      if (Math.random() < this.tripleAccuracy) {
+        return { score: 60, segment: seg, multiplier: 3, isTriple: true, isDouble: false, isBull: false, isMiss: false };
+      }
+      const hitSegment = Math.random() < this.accuracy ? seg : adj[Math.floor(Math.random() * adj.length)];
+      return { score: hitSegment, segment: hitSegment, multiplier: 1, isTriple: false, isDouble: false, isBull: false, isMiss: false };
+    }
+
+    // Setup (outside of direct finish and classic checkout range): prefer leaving D16/D20 next
+    const leaveOptions = [32, 40];
+    for (const leave of leaveOptions) {
+      const needed = remainingScore - leave;
+      if (needed >= 1 && needed <= 20) {
+        const adj = this.getAdjacentSegments(needed);
+        const hitSegment = Math.random() < this.accuracy ? needed : adj[Math.floor(Math.random() * adj.length)];
+        return { score: hitSegment, segment: hitSegment, multiplier: 1, isDouble: false, isMiss: false, isTriple: false, isBull: false };
+      }
+    }
+    // If no clean leave, reduce score with T20-style scoring setup
+    return this.generateRealisticDart(60);
   }
 
   // Generate a realistic dart throw that contributes to the target average
   generateRealisticDart(targetScore = null) {
-    // If no target specified, use the per-dart average
+    // If no target specified, default to scoring toward 60 (T20)
     if (!targetScore) {
-      targetScore = this.averageScore / 3;
+      targetScore = 60;
     }
-    
-    // Miss chance decreases with skill level
+
+    // Global miss chance
     const missChance = Math.max(0.02, 0.15 - (this.skillLevel - 1) * 0.012);
     if (Math.random() < missChance) {
-      return { score: 0, segment: 0, multiplier: 1, isMiss: true };
+      return { score: 0, segment: 0, multiplier: 1, isMiss: true, isBull: false };
     }
-    
-    // Bullseye chance (small but increases with skill)
-    const bullChance = Math.min(0.08, 0.01 + (this.skillLevel - 1) * 0.008);
-    if (Math.random() < bullChance) {
-      // Outer bull (25) or inner bull (50) based on skill
-      const innerBullChance = Math.min(0.3, (this.skillLevel - 1) * 0.03);
-      if (Math.random() < innerBullChance) {
-        return { score: 50, segment: 25, multiplier: 2, isBull: true, isDouble: true };
+
+    // Prefer T20/T19 for scoring; avoid random bull during scoring
+    let aimSegment = 20;
+    let aimMultiplier = 3;
+
+    if (targetScore <= 20) {
+      // Aim a single number specifically
+      aimSegment = Math.min(20, Math.max(1, Math.round(targetScore)));
+      aimMultiplier = 1;
+    } else if (targetScore >= 50) {
+      // High target: T20 primary, occasional T19
+      aimSegment = Math.random() < Math.min(0.15 + this.skillLevel * 0.02, 0.4) ? 19 : 20;
+      aimMultiplier = 3;
+    } else if (targetScore % 2 === 0 && targetScore <= 40) {
+      // Trying to clip a double when asked explicitly
+      aimSegment = targetScore / 2;
+      aimMultiplier = 2;
+    } else {
+      // Mid target: single on high segments
+      aimSegment = Math.min(20, Math.max(15, Math.round(targetScore)));
+      aimMultiplier = 1;
+    }
+
+    // Resolve hit vs. typical misses
+    const adj = this.getAdjacentSegments(aimSegment);
+    let hitSegment = aimSegment;
+    let hitMultiplier = 1;
+
+    if (aimMultiplier === 3) {
+      if (Math.random() < this.tripleAccuracy) {
+        hitMultiplier = 3;
+      } else if (Math.random() < this.accuracy) {
+        hitMultiplier = 1; // fall to single
       } else {
-        return { score: 25, segment: 25, multiplier: 1, isBull: true };
+        hitSegment = adj[Math.floor(Math.random() * adj.length)];
+        hitMultiplier = 1;
       }
-    }
-    
-    // Determine what type of throw to attempt based on target score and skill
-    let attemptType = 'single';
-    let targetSegment = Math.min(20, Math.max(1, Math.round(targetScore)));
-    
-    // Higher skill levels attempt more doubles and triples for higher scores
-    if (targetScore > 20) {
-      const tripleChance = this.tripleAccuracy * 1.5; // Boost triple attempts for high targets
-      const doubleChance = this.doubleAccuracy * 1.2; // Boost double attempts
-      
-      if (targetScore <= 60 && targetScore % 3 === 0 && Math.random() < tripleChance) {
-        attemptType = 'triple';
-        targetSegment = targetScore / 3;
-      } else if (targetScore <= 40 && targetScore % 2 === 0 && Math.random() < doubleChance) {
-        attemptType = 'double';
-        targetSegment = targetScore / 2;
+    } else if (aimMultiplier === 2) {
+      if (Math.random() < this.doubleAccuracy) {
+        hitMultiplier = 2;
+      } else if (Math.random() < this.accuracy) {
+        hitMultiplier = 1; // single instead
       } else {
-        // Aim for high single segments
-        targetSegment = Math.min(20, Math.max(15, Math.round(targetScore * 0.8)));
+        hitSegment = adj[Math.floor(Math.random() * adj.length)];
+        hitMultiplier = 1;
       }
     } else {
-      // For lower targets, occasionally attempt doubles/triples based on skill
-      if (Math.random() < this.tripleAccuracy) {
-        attemptType = 'triple';
-      } else if (Math.random() < this.doubleAccuracy) {
-        attemptType = 'double';
+      // Single aim
+      if (Math.random() >= this.accuracy) {
+        hitSegment = adj[Math.floor(Math.random() * adj.length)];
       }
-    }
-    
-    // Ensure target segment is valid (1-20)
-    targetSegment = Math.min(20, Math.max(1, Math.round(targetSegment)));
-    
-    // Determine if the throw hits the intended target based on accuracy
-    let hitSegment = targetSegment;
-    let hitMultiplier = 1;
-    
-    if (attemptType === 'triple' && Math.random() < this.tripleAccuracy) {
-      hitMultiplier = 3;
-    } else if (attemptType === 'double' && Math.random() < this.doubleAccuracy) {
-      hitMultiplier = 2;
-    } else if (attemptType !== 'single' && Math.random() < this.accuracy) {
-      // Missed the double/triple but hit the single
-      hitMultiplier = 1;
-    } else if (Math.random() > this.accuracy) {
-      // Missed the target segment entirely - hit adjacent
-      const adjacentSegments = this.getAdjacentSegments(targetSegment);
-      hitSegment = adjacentSegments[Math.floor(Math.random() * adjacentSegments.length)];
       hitMultiplier = 1;
     }
-    
+
     const finalScore = hitSegment * hitMultiplier;
-    
     return {
       score: finalScore,
       segment: hitSegment,
@@ -180,6 +225,19 @@ class SimpleDartBot {
 
   // Generate a complete turn (exactly 3 darts) following proper darts rules
   generateTurn(currentScore) {
+    // For high-average bots, when not in finishing range, generate a turn score
+    // directly around the configured average with humanized noise. This keeps
+    // the bot hovering around the selected difficulty and avoids under-scoring.
+    if (this.averageScore >= 90 && currentScore > 170) {
+      const std = Math.max(6, 30 - this.skillLevel * 2); // tighter spread at higher skill
+      let desired = Math.round(this._gauss(this.averageScore, std));
+      desired = Math.max(0, Math.min(180, desired));
+      // Avoid obvious bust/invalid states on the server ruleset
+      if (desired > currentScore) desired = Math.max(0, currentScore - 2);
+      if (currentScore - desired === 1) desired = Math.max(0, desired - 2);
+      return desired;
+    }
+
     const darts = [];
     let remainingScore = currentScore;
     let totalTurnScore = 0;
@@ -288,6 +346,15 @@ class SimpleDartBot {
     
     return [layout[prevIndex], segment, layout[nextIndex]];
   }
+
+  // Gaussian helper (Box-Muller)
+  _gauss(mean, std) {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    return mean + z * std;
+  }
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -388,7 +455,7 @@ io.on('connection', (socket) => {
       // Initialize DartBot for session
       const session = getSession(code);
       if (settings.dartBot?.enabled) {
-        session.dartBotInstances[2] = new SimpleDartBot(settings.dartBot.skillLevel);
+      session.dartBotInstances[2] = new SimpleDartBot(settings.dartBot.skillLevel, settings.dartBot.averageScore);
         sessionGameState.players[1].isBot = true;
       }
 
@@ -463,48 +530,12 @@ io.on('connection', (socket) => {
     addClientToSession(code, socket.id);
     socket.join(code);
     socket.emit('sessionJoined', { code });
-    // Auto-start the game upon successful pairing
+    // Do not auto-start; allow mobile to choose starting player
     const sGameState = session.gameState;
-    sGameState.gameStarted = true;
-    sGameState.currentPlayer = sGameState.legStartingPlayer;
+    sGameState.gameStarted = false;
     socket.emit('gameState', sGameState);
     io.to(code).emit('gameState', sGameState);
     io.to(code).emit('connectionStatus', { status: 'client_joined', code, clients: session.clients.size });
-
-    // If starting player is a bot, let them throw first
-    const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-    if (startingPlayer && startingPlayer.isBot) {
-      setTimeout(() => {
-        const avg = sGameState.settings.dartBot?.averageScore ?? 50;
-        const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
-        const previousScore = startingPlayer.score;
-        const newScore = previousScore - turnScore;
-
-        const throwDetails = {
-          score: turnScore,
-          playerId: startingPlayer.id,
-          timestamp: new Date(),
-          previousScore,
-          remainingScore: Math.max(newScore, 0)
-        };
-
-        sGameState.throwHistory.push(throwDetails);
-        if (newScore < 0 || newScore === 1) {
-          io.to(code).emit('bust', { playerId: startingPlayer.id });
-        } else if (newScore === 0) {
-          sGameState.gameWon = true;
-          sGameState.winner = startingPlayer;
-          startingPlayer.score = 0;
-          io.to(code).emit('gameWon', { winner: startingPlayer });
-        } else {
-          startingPlayer.score = newScore;
-        }
-
-        // Switch to next player
-        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-        io.to(code).emit('gameState', sGameState);
-      }, 1000);
-    }
   });
 
   // Set starting player within a session and start the match
@@ -523,19 +554,19 @@ io.on('connection', (socket) => {
 
       // Initialize DartBot for the session if enabled
       if (sGameState.settings.dartBot?.enabled) {
-        session.dartBotInstances[2] = session.dartBotInstances[2] || new SimpleDartBot(sGameState.settings.dartBot.skillLevel);
+        session.dartBotInstances[2] = session.dartBotInstances[2] || new SimpleDartBot(sGameState.settings.dartBot.skillLevel, sGameState.settings.dartBot.averageScore);
         sGameState.players[1].isBot = true;
       }
 
       io.to(code).emit('gameState', sGameState);
 
-      // If starting player is a bot, trigger their throw (basic session support)
+      // If starting player is a bot, trigger their throw using the bot model
       const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
       if (startingPlayer && startingPlayer.isBot) {
         setTimeout(() => {
-          // Generate a simple bot turn based on average score
-          const avg = sGameState.settings.dartBot?.averageScore ?? 50;
-          const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
+          const botInstance = session.dartBotInstances[startingPlayer.id] || session.dartBotInstances[2];
+          const turnScore = botInstance ? botInstance.generateTurn(startingPlayer.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
+
           const previousScore = startingPlayer.score;
           const newScore = previousScore - turnScore;
 
@@ -547,9 +578,19 @@ io.on('connection', (socket) => {
             remainingScore: Math.max(newScore, 0)
           };
 
+          // Record on player and global histories
+          startingPlayer.throws.push(throwDetails);
           sGameState.throwHistory.push(throwDetails);
+          // Update match-long totals
+          if (typeof throwDetails.score === 'number') {
+            startingPlayer.totalThrows = (startingPlayer.totalThrows || 0) + 1;
+            startingPlayer.totalScore = (startingPlayer.totalScore || 0) + throwDetails.score;
+            startingPlayer.matchAverageScore = Math.round(((startingPlayer.totalScore || 0) / (startingPlayer.totalThrows || 1)) * 100) / 100;
+          }
+
           if (newScore < 0 || newScore === 1) {
             io.to(code).emit('bust', { playerId: startingPlayer.id });
+            // No score change on bust
           } else if (newScore === 0) {
             sGameState.gameWon = true;
             sGameState.winner = startingPlayer;
@@ -557,6 +598,7 @@ io.on('connection', (socket) => {
             io.to(code).emit('gameWon', { winner: startingPlayer });
           } else {
             startingPlayer.score = newScore;
+            updatePlayerAverage(startingPlayer);
           }
 
           // Switch to next player
@@ -594,45 +636,8 @@ io.on('connection', (socket) => {
     sGameState.gameWon = false;
     sGameState.winner = undefined;
     sGameState.throwHistory = [];
-    // Auto-start immediately after reset
-    sGameState.gameStarted = true;
-    sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
+    // Do not auto-start; let client choose starter via setStartingPlayerInSession
     io.to(code).emit('gameState', sGameState);
-
-    // If starting player is a bot, let them throw first
-    const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-    if (startingPlayer && startingPlayer.isBot) {
-      setTimeout(() => {
-        const avg = sGameState.settings.dartBot?.averageScore ?? 50;
-        const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
-        const previousScore = startingPlayer.score;
-        const newScore = previousScore - turnScore;
-
-        const throwDetails = {
-          score: turnScore,
-          playerId: startingPlayer.id,
-          timestamp: new Date(),
-          previousScore,
-          remainingScore: Math.max(newScore, 0)
-        };
-
-        sGameState.throwHistory.push(throwDetails);
-        if (newScore < 0 || newScore === 1) {
-          io.to(code).emit('bust', { playerId: startingPlayer.id });
-        } else if (newScore === 0) {
-          sGameState.gameWon = true;
-          sGameState.winner = startingPlayer;
-          startingPlayer.score = 0;
-          io.to(code).emit('gameWon', { winner: startingPlayer });
-        } else {
-          startingPlayer.score = newScore;
-        }
-
-        // Switch to next player
-        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-        io.to(code).emit('gameState', sGameState);
-      }, 1000);
-    }
   });
 
   // Update settings within a session and restart the match
@@ -664,57 +669,23 @@ io.on('connection', (socket) => {
 
     // Configure DartBot for the session if enabled
     if (sGameState.settings.dartBot?.enabled) {
-      session.dartBotInstances[2] = new SimpleDartBot(sGameState.settings.dartBot.skillLevel);
+      session.dartBotInstances[2] = new SimpleDartBot(sGameState.settings.dartBot.skillLevel, sGameState.settings.dartBot.averageScore);
       sGameState.players[1].isBot = true;
     } else {
       session.dartBotInstances[2] = null;
       sGameState.players[1].isBot = false;
     }
 
-    // Reset match state and auto-start
+    // Reset match state; do not auto-start so mobile can choose starter
     sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
     sGameState.currentLeg = 1;
     sGameState.currentSet = 1;
-    sGameState.gameStarted = true;
+    sGameState.gameStarted = false;
     sGameState.gameWon = false;
     sGameState.winner = undefined;
     sGameState.throwHistory = [];
     io.to(code).emit('gameState', sGameState);
-
-    // If starting player is a bot, perform initial bot throw
-    const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-    if (startingPlayer && startingPlayer.isBot) {
-      setTimeout(() => {
-        const avg = sGameState.settings.dartBot?.averageScore ?? 50;
-        const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
-        const previousScore = startingPlayer.score;
-        const newScore = previousScore - turnScore;
-
-        const throwDetails = {
-          score: turnScore,
-          playerId: startingPlayer.id,
-          timestamp: new Date(),
-          previousScore,
-          remainingScore: Math.max(newScore, 0)
-        };
-
-        sGameState.throwHistory.push(throwDetails);
-        if (newScore < 0 || newScore === 1) {
-          io.to(code).emit('bust', { playerId: startingPlayer.id });
-        } else if (newScore === 0) {
-          sGameState.gameWon = true;
-          sGameState.winner = startingPlayer;
-          startingPlayer.score = 0;
-          io.to(code).emit('gameWon', { winner: startingPlayer });
-        } else {
-          startingPlayer.score = newScore;
-        }
-
-        // Switch to next player
-        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-        io.to(code).emit('gameState', sGameState);
-      }, 1000);
-    }
+    // Starter selection will be sent by client via setStartingPlayerInSession
   });
 
   // Mobile/client submits score within a session
@@ -754,6 +725,47 @@ io.on('connection', (socket) => {
       io.to(code).emit('bust', { playerId });
       sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
       io.to(code).emit('gameState', sGameState);
+      // If next player is a bot, schedule their throw
+      const nextPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+      if (nextPlayer && nextPlayer.isBot) {
+        setTimeout(() => {
+          const botInstance = session.dartBotInstances[nextPlayer.id] || session.dartBotInstances[2];
+          const turnScore = botInstance ? botInstance.generateTurn(nextPlayer.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
+          const previousScore = nextPlayer.score;
+          const newScore2 = previousScore - turnScore;
+
+          const throwDetails2 = {
+            score: turnScore,
+            playerId: nextPlayer.id,
+            timestamp: new Date(),
+            previousScore,
+            remainingScore: Math.max(newScore2, 0)
+          };
+
+          nextPlayer.throws.push(throwDetails2);
+          sGameState.throwHistory.push(throwDetails2);
+          if (typeof throwDetails2.score === 'number') {
+            nextPlayer.totalThrows = (nextPlayer.totalThrows || 0) + 1;
+            nextPlayer.totalScore = (nextPlayer.totalScore || 0) + throwDetails2.score;
+            nextPlayer.matchAverageScore = Math.round(((nextPlayer.totalScore || 0) / (nextPlayer.totalThrows || 1)) * 100) / 100;
+          }
+
+          if (newScore2 < 0 || newScore2 === 1) {
+            io.to(code).emit('bust', { playerId: nextPlayer.id });
+          } else if (newScore2 === 0) {
+            sGameState.gameWon = true;
+            sGameState.winner = nextPlayer;
+            nextPlayer.score = 0;
+            io.to(code).emit('gameWon', { winner: nextPlayer });
+          } else {
+            nextPlayer.score = newScore2;
+          }
+
+          // Switch back to the other player after bot's turn
+          sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+          io.to(code).emit('gameState', sGameState);
+        }, 1000);
+      }
       return;
     }
 
@@ -791,6 +803,47 @@ io.on('connection', (socket) => {
       updatePlayerAverage(player);
       sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
       io.to(code).emit('gameState', sGameState);
+      // If next player is a bot, schedule their throw
+      const nextPlayer2 = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+      if (nextPlayer2 && nextPlayer2.isBot) {
+        setTimeout(() => {
+          const botInstance = session.dartBotInstances[nextPlayer2.id] || session.dartBotInstances[2];
+          const turnScore = botInstance ? botInstance.generateTurn(nextPlayer2.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
+          const previousScore = nextPlayer2.score;
+          const newScore2 = previousScore - turnScore;
+
+          const throwDetails2 = {
+            score: turnScore,
+            playerId: nextPlayer2.id,
+            timestamp: new Date(),
+            previousScore,
+            remainingScore: Math.max(newScore2, 0)
+          };
+
+          nextPlayer2.throws.push(throwDetails2);
+          sGameState.throwHistory.push(throwDetails2);
+          if (typeof throwDetails2.score === 'number') {
+            nextPlayer2.totalThrows = (nextPlayer2.totalThrows || 0) + 1;
+            nextPlayer2.totalScore = (nextPlayer2.totalScore || 0) + throwDetails2.score;
+            nextPlayer2.matchAverageScore = Math.round(((nextPlayer2.totalScore || 0) / (nextPlayer2.totalThrows || 1)) * 100) / 100;
+          }
+
+          if (newScore2 < 0 || newScore2 === 1) {
+            io.to(code).emit('bust', { playerId: nextPlayer2.id });
+          } else if (newScore2 === 0) {
+            sGameState.gameWon = true;
+            sGameState.winner = nextPlayer2;
+            nextPlayer2.score = 0;
+            io.to(code).emit('gameWon', { winner: nextPlayer2 });
+          } else {
+            nextPlayer2.score = newScore2;
+          }
+
+          // Switch back after bot's turn
+          sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+          io.to(code).emit('gameState', sGameState);
+        }, 1000);
+      }
       return;
     }
 
@@ -849,15 +902,15 @@ io.on('connection', (socket) => {
 
       io.to(code).emit('gameState', sGameState);
 
-      // If new starting player is a bot, let them throw
+      // If new starting player is a bot, let them throw using the bot model
       const newStarter = sGameState.players.find(p => p.id === sGameState.currentPlayer);
       if (newStarter && newStarter.isBot) {
         setTimeout(() => {
-          const avg = sGameState.settings.dartBot?.averageScore ?? 50;
-          const turnScore = Math.max(0, Math.min(180, Math.round(avg)));
+          const botInstance = session.dartBotInstances[newStarter.id] || session.dartBotInstances[2];
+          const botTurn = botInstance ? botInstance.generateTurn(newStarter.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
           const prev = newStarter.score;
-          const next = prev - turnScore;
-          const t = { score: turnScore, timestamp: new Date(), remainingScore: Math.max(next, 0), playerId: newStarter.id, previousScore: prev };
+          const next = prev - botTurn;
+          const t = { score: botTurn, timestamp: new Date(), remainingScore: Math.max(next, 0), playerId: newStarter.id, previousScore: prev };
           newStarter.throws.push(t);
           sGameState.throwHistory.push(t);
           // Update match-long totals for bot throws
@@ -875,6 +928,7 @@ io.on('connection', (socket) => {
             io.to(code).emit('gameWon', { winner: newStarter });
           } else {
             newStarter.score = next;
+            updatePlayerAverage(newStarter);
           }
           sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
           io.to(code).emit('gameState', sGameState);
@@ -888,6 +942,37 @@ io.on('connection', (socket) => {
     updatePlayerAverage(player);
     sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
     io.to(code).emit('gameState', sGameState);
+
+    // If next player is a bot, schedule their turn using the bot model
+    const nextPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+    if (nextPlayer && nextPlayer.isBot) {
+      setTimeout(() => {
+        const botInstance = session.dartBotInstances[nextPlayer.id] || session.dartBotInstances[2];
+        const botTurn = botInstance ? botInstance.generateTurn(nextPlayer.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
+        const prev = nextPlayer.score;
+        const next = prev - botTurn;
+        const t = { score: botTurn, timestamp: new Date(), remainingScore: Math.max(next, 0), playerId: nextPlayer.id, previousScore: prev };
+        nextPlayer.throws.push(t);
+        sGameState.throwHistory.push(t);
+        if (typeof t.score === 'number') {
+          nextPlayer.totalThrows = (nextPlayer.totalThrows || 0) + 1;
+          nextPlayer.totalScore = (nextPlayer.totalScore || 0) + t.score;
+          nextPlayer.matchAverageScore = Math.round(((nextPlayer.totalScore || 0) / (nextPlayer.totalThrows || 1)) * 100) / 100;
+        }
+        if (next < 0 || next === 1) {
+          io.to(code).emit('bust', { playerId: nextPlayer.id });
+        } else if (next === 0) {
+          sGameState.gameWon = true;
+          sGameState.winner = nextPlayer;
+          nextPlayer.score = 0;
+          io.to(code).emit('gameWon', { winner: nextPlayer });
+        } else {
+          nextPlayer.score = next;
+        }
+        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+        io.to(code).emit('gameState', sGameState);
+      }, 1000);
+    }
   });
 
   // Undo last throw within a specific session
@@ -951,11 +1036,14 @@ io.on('connection', (socket) => {
       // Initialize DartBot if enabled (now that the game is starting)
       if (gameState.settings.dartBot?.enabled) {
         // Create bot instance for player 2 (since player 2 is the bot)
-        dartBotInstances[2] = new SimpleDartBot(gameState.settings.dartBot.skillLevel);
+    dartBotInstances[2] = new SimpleDartBot(gameState.settings.dartBot.skillLevel, gameState.settings.dartBot.averageScore);
         console.log(`🤖 DartBot initialized for Player 2 with skill level ${gameState.settings.dartBot.skillLevel}`);
+        // Mark Player 2 as bot for turn scheduling
+        gameState.players[1].isBot = true;
       } else {
         dartBotInstances[1] = null;
         dartBotInstances[2] = null;
+        gameState.players[1].isBot = false;
       }
       
       console.log(`🎯 Starting player manually set to: Player ${playerId} and starting the game`);

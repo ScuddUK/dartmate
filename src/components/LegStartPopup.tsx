@@ -15,23 +15,9 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
   onPlayerSelected
 }) => {
   const [selectedPlayer, setSelectedPlayer] = useState<number>(gameState.legStartingPlayer);
-  const [isFlipping, setIsFlipping] = useState(false);
+  
 
   if (!isVisible) return null;
-
-  const isFirstLeg = gameState.currentLeg === 1;
-
-  const handleCoinToss = () => {
-    setIsFlipping(true);
-    
-    // Simulate coin flip animation then start immediately
-    setTimeout(() => {
-      const randomPlayer = Math.random() < 0.5 ? 1 : 2;
-      onPlayerSelected(randomPlayer);
-      setIsFlipping(false);
-      onClose();
-    }, 800);
-  };
 
   const handleStartLeg = () => {
     onPlayerSelected(selectedPlayer);
@@ -58,10 +44,10 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
             {gameState.players.map((player) => (
               <button
                 key={player.id}
-                onClick={() => { onPlayerSelected(player.id); onClose(); }}
+                onClick={() => setSelectedPlayer(player.id)}
                 className={`flex-1 p-4 rounded-lg border-2 transition-all ${
                   selectedPlayer === player.id
-                    ? 'border-blue-600 bg-blue-50 text-blue-800'
+                    ? 'border-purple-700 bg-purple-50 text-purple-900 shadow-md'
                     : 'border-gray-300 bg-gray-50 text-gray-700 hover:border-gray-400'
                 }`}
               >
@@ -72,25 +58,6 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
               </button>
             ))}
           </div>
-
-          <div className="mb-6">
-            <button
-              onClick={handleCoinToss}
-              disabled={isFlipping}
-              className={`w-full p-3 rounded-lg border-2 border-dashed border-gray-400 text-gray-600 hover:border-gray-500 hover:text-gray-700 transition-all ${
-                isFlipping ? 'animate-pulse' : ''
-              }`}
-            >
-              {isFlipping ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                  Flipping coin...
-                </div>
-              ) : (
-                '🪙 Coin Toss (Random)'
-              )}
-            </button>
-          </div>
         </div>
 
         <div className="flex">
@@ -99,6 +66,12 @@ export const LegStartPopup: React.FC<LegStartPopupProps> = ({
             className="flex-1 bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 transition-colors"
           >
             Cancel
+          </button>
+          <button
+            onClick={handleStartLeg}
+            className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors ml-4"
+          >
+            Start Game
           </button>
         </div>
       </div>

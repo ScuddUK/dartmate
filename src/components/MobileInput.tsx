@@ -44,7 +44,8 @@ const MobileInput: React.FC<MobileInputProps> = ({
         const rows = 4;
         const byWidth = Math.floor((width - gap * (cols - 1)) / cols);
         const byHeight = Math.floor((height - gap * (rows - 1)) / rows);
-        const size = Math.max(56, Math.min(byWidth, byHeight));
+        const sizeRaw = Math.min(byWidth, byHeight);
+        const size = Math.max(52, Math.floor(sizeRaw * 0.9)); // slightly smaller buttons
         setBtnSize(size);
         const nameSize = Math.max(18, Math.floor(size * 0.28));
         const scoreSize = Math.max(24, Math.floor(size * 0.46));
@@ -129,12 +130,12 @@ const MobileInput: React.FC<MobileInputProps> = ({
       )}
 
       {/* Current Player Display - Compact */}
-      <div className="text-center py-4 flex-shrink-0">
-        <div className="dart-display p-4 rounded-xl mx-4">
+      <div className="text-center py-2 flex-shrink-0">
+        <div className="dart-display p-3 rounded-xl mx-4">
           <div className="font-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: fonts.name }}>
             {currentPlayer?.name}
           </div>
-          <div className="font-score font-bold mb-2" style={{ color: 'var(--color-text)', fontSize: fonts.score }}>
+          <div className="font-score font-bold mb-1" style={{ color: 'var(--color-text)', fontSize: fonts.score }}>
             {inputScore || '0'}
           </div>
           <div className="text-gray-400" style={{ fontSize: fonts.info }}>
@@ -144,14 +145,14 @@ const MobileInput: React.FC<MobileInputProps> = ({
       </div>
 
       {/* Number Pad - Dynamically Scaled for Touch */}
-      <div ref={gridWrapRef} className="flex-1 flex flex-col justify-center px-4 pb-4">
+      <div ref={gridWrapRef} className="flex-1 flex flex-col justify-start px-4 pb-3 mt-1">
         {/* Calculate dynamic button size based on screen width */}
-        <div className="grid grid-cols-3 gap-2 w-full max-w-sm mx-auto">
+        <div className="grid grid-cols-3 gap-2 w-full mx-auto">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleNumberInput(num.toString())}
-              className="text-white font-bold active:scale-95 transition-transform rounded-lg flex items-center justify-center"
+              className="text-white font-bold active:scale-95 transition-transform rounded-lg flex items-center justify-center justify-self-center"
               style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
             >
               {num}
@@ -162,14 +163,14 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <button
             onClick={handleContextButton}
             disabled={contextButtonProps.disabled}
-            className="text-white font-bold active:scale-95 transition-all duration-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            className="text-white font-bold active:scale-95 transition-all duration-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center justify-self-center"
             style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
           >
             {contextButtonProps.text}
           </button>
           <button
             onClick={() => handleNumberInput('0')}
-            className="text-white font-bold active:scale-95 transition-transform rounded-lg flex items-center justify-center"
+            className="text-white font-bold active:scale-95 transition-transform rounded-lg flex items-center justify-center justify-self-center"
             style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
           >
             0
@@ -177,7 +178,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
           <button
             onClick={handleSubmit}
             disabled={!isValidScore() || !gameState.gameStarted}
-            className="text-white font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-center"
+            className="text-white font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-center justify-self-center"
             style={{ width: btnSize, height: btnSize, backgroundColor: 'var(--color-primary)', border: '1px solid var(--color-border)', fontSize: fonts.btn }}
           >
             ✓

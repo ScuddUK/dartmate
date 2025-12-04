@@ -57,17 +57,27 @@ function AppContent() {
   }, [connectionStatus, showPairCodeModal]);
 
   // Show starting player selection on mobile after pairing, before any throws
+  const [startPending, setStartPending] = useState(false);
+
   useEffect(() => {
     if (
       viewMode === 'mobile' &&
       gameState &&
       !gameState.gameStarted &&
       sessionCode &&
-      !showLegStartPopup
+      !showLegStartPopup &&
+      !startPending
     ) {
       setShowLegStartPopup(true);
     }
-  }, [viewMode, gameState?.gameStarted, sessionCode, showLegStartPopup]);
+  }, [viewMode, gameState?.gameStarted, sessionCode, showLegStartPopup, startPending]);
+
+  // Clear pending flag once the server confirms the game has started
+  useEffect(() => {
+    if (gameState?.gameStarted) {
+      setStartPending(false);
+    }
+  }, [gameState?.gameStarted]);
 
   const handleStartGame = (settings: GameSettingsType) => {
     // Apply settings and restart if paired; otherwise start new game/session
@@ -92,6 +102,7 @@ function AppContent() {
   };
 
   const handlePlayerSelected = (playerId: number) => {
+    setStartPending(true);
     setStartingPlayer(playerId);
     setShowLegStartPopup(false);
   };
@@ -168,7 +179,6 @@ function AppContent() {
         {showPairCodeModal && pairCode && (
           <PairCodeModal 
             code={pairCode} 
-            masterCode={masterCode} 
             onClose={() => {
               setShowPairCodeModal(false);
               // Keep current view; starter selection happens on mobile after game starts
@@ -232,7 +242,6 @@ function AppContent() {
       {showPairCodeModal && pairCode && (
         <PairCodeModal 
           code={pairCode} 
-          masterCode={masterCode} 
           onClose={() => {
             setShowPairCodeModal(false);
             // Starter selection now occurs on mobile after game start

@@ -197,9 +197,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
                 : ''
             }`}
             style={gameState.currentPlayer === player.id ? {
-              borderColor: '#b7e4c7',
-              backgroundColor: 'var(--color-primary-alpha)',
-              boxShadow: `0 10px 15px -3px var(--color-primary-alpha), 0 4px 6px -2px var(--color-primary-alpha)`
+              borderColor: 'rgba(94, 42, 142, 0.7)',
+              backgroundColor: 'rgba(94, 42, 142, 0.18)',
+              boxShadow: '0 10px 15px -3px rgba(94, 42, 142, 0.25), 0 4px 6px -2px rgba(94, 42, 142, 0.2)'
             } : { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
           >
             {/* Player Name - No editing functionality */}
