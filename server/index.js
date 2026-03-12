@@ -12,6 +12,12 @@ dotenv.config();
 
 const BOT_THINK_MS = 2500;
 
+const BOGEY_NUMBERS = new Set([159, 162, 163, 165, 166, 168, 169]);
+
+function isCheckoutable(remaining) {
+  return remaining >= 2 && remaining <= 170 && !BOGEY_NUMBERS.has(remaining);
+}
+
 // Simple DartBot implementation for server
 class SimpleDartBot {
   constructor(skillLevel, targetAverage = null) {
@@ -509,7 +515,7 @@ io.on('connection', (socket) => {
       const previousScore = botPlayer.score;
       const newScore = previousScore - turnScore;
 
-      const isBust = newScore < 0 || newScore === 1 || (newScore === 0 && (turnScore % 2 === 1));
+      const isBust = newScore < 0 || newScore === 1 || (newScore === 0 && !isCheckoutable(previousScore));
       if (isBust) {
         const bustRecord = {
           score: 'bust',
@@ -859,7 +865,7 @@ io.on('connection', (socket) => {
     if (!player) return;
     const previousScore = player.score;
     const newScore = player.score - score;
-    const isBust = newScore < 0 || newScore === 1 || (newScore === 0 && (score % 2 === 1));
+    const isBust = newScore < 0 || newScore === 1 || (newScore === 0 && !isCheckoutable(previousScore));
     if (isBust) {
       // Bust - record bust without changing score
       const bustRecord = {
@@ -1020,9 +1026,10 @@ io.on('connection', (socket) => {
     
     if (player && score >= 0 && score <= 180) {
       // Check if this would be a bust before recording anything
+      const previousScore = player.score;
       const newScore = player.score - score;
       
-      if (newScore < 0 || newScore === 1 || (newScore === 0 && (score % 2 === 1))) {
+      if (newScore < 0 || newScore === 1 || (newScore === 0 && !isCheckoutable(previousScore))) {
         // Bust - don't record the throw, just emit bust event
         socket.emit('bust', { playerId });
         
@@ -1310,9 +1317,10 @@ function makeBotThrow(playerId) {
   // Simulate the throw with a delay for realism
   setTimeout(() => {
     // Check if this would be a bust before recording anything
+    const previousScore = player.score;
     const newScore = player.score - turnScore;
     
-    if (newScore < 0 || newScore === 1 || (newScore === 0 && (turnScore % 2 === 1))) {
+    if (newScore < 0 || newScore === 1 || (newScore === 0 && !isCheckoutable(previousScore))) {
       // Bust - don't record the throw, just emit bust event
       io.emit('bust', { playerId });
       
