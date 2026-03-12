@@ -1,19 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FC } from 'react';
 import { GameState } from '../types/game';
-import { useTheme } from '../contexts/ThemeContext';
+import { LegWonPopup } from './LegWonPopup';
 
 interface MobileInputProps {
   gameState: GameState;
   onSubmitScore: (score: number, playerId: number) => void;
   onUndoLastThrow: () => void;
+  onStartNextLeg?: () => void;
 }
 
-const MobileInput: React.FC<MobileInputProps> = ({ 
+const MobileInput: FC<MobileInputProps> = ({ 
   gameState, 
   onSubmitScore, 
-  onUndoLastThrow 
+  onUndoLastThrow,
+  onStartNextLeg
 }) => {
-  const { currentTheme } = useTheme();
   const [inputScore, setInputScore] = useState('');
   const gridWrapRef = useRef<HTMLDivElement>(null);
   const [btnSize, setBtnSize] = useState<number>(80);
@@ -123,7 +124,7 @@ const MobileInput: React.FC<MobileInputProps> = ({
       {/* Game Status */}
       {!gameState.gameStarted && (
         <div className="text-center py-4 flex-shrink-0">
-          <div className="text-yellow-100 px-4 py-2 rounded-lg mt-2 mx-4" style={{ backgroundColor: 'var(--color-warning)' }}>
+          <div className="px-4 py-2 rounded-lg mt-2 mx-4" style={{ backgroundColor: 'var(--color-warning)', color: '#07162D' }}>
             ⚠️ Game not started yet. Switch to Scoreboard view to start.
           </div>
         </div>
@@ -194,6 +195,13 @@ const MobileInput: React.FC<MobileInputProps> = ({
           </div>
         )}
       </div>
+
+      <LegWonPopup
+        isVisible={!!gameState.pendingNextLeg && !!gameState.lastLegResult}
+        winnerName={gameState.lastLegResult?.winnerName || ''}
+        legAverage={gameState.lastLegResult?.legAverage || 0}
+        onStartNextLeg={onStartNextLeg}
+      />
     </div>
   );
 };

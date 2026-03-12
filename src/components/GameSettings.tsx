@@ -12,7 +12,7 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
     legsToWin: 3,
     setsEnabled: false,
     setsToWin: 3,
-    playerNames: ['Player 1', 'Player 2'],
+    playerNames: ['HOME', 'AWAY'],
     dartBot: {
       enabled: false,
       skillLevel: 5,
@@ -25,7 +25,7 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
 
   const handlePlayerNameChange = (index: 0 | 1, name: string) => {
     const newNames = [...settings.playerNames] as [string, string];
-    newNames[index] = name;
+    newNames[index] = name.toUpperCase();
     setSettings({ ...settings, playerNames: newNames });
   };
 
@@ -91,9 +91,9 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                   type="text"
                   value={settings.playerNames[0]}
                   onChange={(e) => handlePlayerNameChange(0, e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg focus:outline-none"
+                  className="w-full px-4 py-3 rounded-lg focus:outline-none uppercase"
                   style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-                  placeholder="Enter player 1 name"
+                  placeholder="HOME"
                 />
               </div>
               <div>
@@ -103,13 +103,13 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
                      type="text"
                      value={settings.playerNames[1]}
                      onChange={(e) => handlePlayerNameChange(1, e.target.value)}
-                     className="w-full px-4 py-3 rounded-lg focus:outline-none"
+                     className="w-full px-4 py-3 rounded-lg focus:outline-none uppercase"
                      style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-                     placeholder="Enter player 2 name"
+                     placeholder="AWAY"
                    />
                 ) : (
                   <div className="w-full px-4 py-3 rounded-lg flex items-center" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
-                    <span className="text-blue-400 mr-2">🤖</span>
+                    <span className="mr-2" style={{ color: 'var(--color-primary)' }}>🤖</span>
                     <span>{settings.dartBot.name}</span>
                     <span className="ml-auto text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                       Avg: {settings.dartBot.averageScore}
@@ -284,10 +284,8 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
             <button
               onClick={handleStartGame}
               disabled={!settings.playerNames[0].trim() || (!settings.dartBot.enabled && !settings.playerNames[1].trim())}
-              className="w-full py-4 px-6 text-white font-bold text-xl rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full py-4 px-6 text-white font-bold text-xl rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:opacity-95"
               style={{ backgroundColor: 'var(--color-primary)' }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-secondary)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary)'}
             >
               🚀 Start Game
             </button>

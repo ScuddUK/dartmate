@@ -1,19 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FC, type MutableRefObject } from 'react';
 import { GameState } from '../types/game';
-import { useTheme } from '../contexts/ThemeContext';
+import { LegWonPopup } from './LegWonPopup';
 
 interface ScoreboardProps {
   gameState: GameState;
-  onResetGame: () => void;
-  onStartGame: () => void;
 }
 
-const Scoreboard: React.FC<ScoreboardProps> = ({ 
-  gameState, 
-  onResetGame, 
-  onStartGame
+const Scoreboard: FC<ScoreboardProps> = ({ 
+  gameState
 }) => {
-  const { currentTheme } = useTheme();
   const [isLandscape, setIsLandscape] = useState(false);
   // Dynamic font sizing for recent throws per player
   const player1HistoryRef = useRef<HTMLDivElement | null>(null);
@@ -40,14 +35,16 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
 
   // Calculate dynamic font sizes to fit 5 lines in the history area
   useEffect(() => {
-    const rafRef = { current: 0 } as React.MutableRefObject<number>;
+    const rafRef = { current: 0 } as MutableRefObject<number>;
     const updateFontSizes = () => {
       const calcSize = (el: HTMLDivElement | null) => {
         if (!el) return 18;
         const h = el.clientHeight;
         if (!h || h < 100) return 18;
-        // Fit exactly five lines with a small padding buffer
-        const size = Math.floor(h / 5) - 2;
+        const fit = Math.floor(h / 5);
+        const base = Math.max(0, fit - 2);
+        const target = Math.round(base * 1.15);
+        const size = Math.min(target, fit);
         return Math.max(18, Math.min(size, 96));
       };
       const applySizes = () => {
@@ -144,7 +141,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
             <span className={`flex items-center ${
               isLandscape ? 'gap-2' : 'gap-3 lg:gap-4'
             }`}>
-              <span className={`font-score line-through opacity-80 ${isLandscape ? 'min-w-[30px]' : 'min-w-[40px] lg:min-w-[60px]'}`} style={{ color: 'red' }}>{previousTotal}</span>
+              <span className={`font-score line-through opacity-80 ${isLandscape ? 'min-w-[30px]' : 'min-w-[40px] lg:min-w-[60px]'}`} style={{ color: 'var(--color-error)' }}>{previousTotal}</span>
               <span 
                 className={`${isLandscape ? 'mx-2' : 'mx-2'}`}
                 style={{ color: 'var(--color-primary)' }}
@@ -160,11 +157,11 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen p-4" style={{ backgroundColor: 'var(--color-background)', color: '#000' }}>
+    <div className="h-screen box-border p-4 flex flex-col" style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text)' }}>
       {/* Game Info */}
       {gameState.settings && (
         <div className={`text-center ${isLandscape ? 'mb-3' : 'mb-6'}`}>
-          <div className={`${isLandscape ? 'text-sm' : 'text-xl lg:text-2xl'}`} style={{ color: '#333' }}>
+          <div className={`${isLandscape ? 'text-sm' : 'text-xl lg:text-2xl'}`} style={{ color: 'var(--color-text-secondary)' }}>
             {gameState.settings.setsEnabled ? (
               <div>
                 Set {gameState.currentSet || 1} • Leg {gameState.currentLeg || 1} • 
@@ -183,7 +180,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
       )}
 
       {/* Players Grid - Dynamic scaling based on screen size and orientation */}
-      <div className={`grid gap-4 lg:gap-8 h-[calc(100vh-200px)] max-w-full mx-auto ${
+      <div className={`grid gap-4 lg:gap-8 flex-1 min-h-0 w-full ${
         isLandscape ? 'grid-cols-2' : 'grid-cols-1 lg:grid-cols-2'
       }`}>
         {gameState.players.map((player) => (
@@ -197,9 +194,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
                 : ''
             }`}
             style={gameState.currentPlayer === player.id ? {
-              borderColor: 'rgba(94, 42, 142, 0.7)',
-              backgroundColor: 'rgba(94, 42, 142, 0.18)',
-              boxShadow: '0 10px 15px -3px rgba(94, 42, 142, 0.25), 0 4px 6px -2px rgba(94, 42, 142, 0.2)'
+              borderColor: 'var(--color-primary)',
+              backgroundColor: 'var(--color-primary-alpha)',
+              boxShadow: '0 10px 15px -3px rgba(11, 74, 161, 0.22), 0 4px 6px -2px rgba(11, 74, 161, 0.18)'
             } : { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
           >
             {/* Player Name - No editing functionality */}
@@ -207,7 +204,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
               <h2 className={`font-bold ${
                 isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
               }`}
-              style={{ color: '#000' }}>
+              style={{ color: 'var(--color-text)' }}>
                 {player.name}
               </h2>
             </div>
@@ -216,15 +213,15 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
             <div className={`text-center ${isLandscape ? 'mb-3' : 'mb-6 lg:mb-8'}`}>
               <div 
                 className={`font-main-score font-bold ${
-                  isLandscape ? 'text-7xl mb-1' : 'text-9xl lg:text-[12rem] xl:text-[14rem] mb-2'
+                  isLandscape ? 'text-7xl mb-1' : 'text-9xl lg:text-[11rem] xl:text-[12rem] 2xl:text-[12rem] mb-2'
                 }`}
-                style={{ color: '#000' }}
+                style={{ color: 'var(--color-text)' }}
               >
                 {player.score}
               </div>
               <div className={`${
                 isLandscape ? 'text-xs' : 'text-lg lg:text-2xl xl:text-3xl'
-              }`} style={{ color: '#333' }}>
+              }`} style={{ color: 'var(--color-text-secondary)' }}>
                 Remaining Score
               </div>
             </div>
@@ -235,47 +232,47 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
             }`}>
               {gameState.settings?.setsEnabled && (
                 <div className="text-center">
-                  <div className={`font-score font-bold ${
-                  isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
-                }`} style={{ color: '#000' }}>
+                <div className={`font-score font-bold ${
+                  isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-5xl'
+                }`} style={{ color: 'var(--color-text)' }}>
                   {player.setsWon || 0}
                 </div>
                   <div className={`${
                     isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
-                  }`} style={{ color: '#333' }}>Sets Won</div>
+                  }`} style={{ color: 'var(--color-text-secondary)' }}>Sets Won</div>
                 </div>
               )}
               <div className="text-center">
                 <div className={`font-score font-bold ${
-                  isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
-                }`} style={{ color: '#000' }}>
+                  isLandscape ? 'text-2xl' : 'text-4xl lg:text-6xl xl:text-6xl'
+                }`} style={{ color: 'var(--color-text)' }}>
                   {player.legsWon}
                 </div>
                 <div className={`${
-                  isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
-                }`} style={{ color: '#333' }}>Legs Won</div>
+                  isLandscape ? 'text-sm' : 'text-base lg:text-xl xl:text-2xl'
+                }`} style={{ color: 'var(--color-text-secondary)' }}>Legs Won</div>
               </div>
               <div className="text-center">
                 <div className={`font-score font-bold ${
-                  isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
-                }`} style={{ color: '#000' }}>
+                  isLandscape ? 'text-2xl' : 'text-4xl lg:text-6xl xl:text-6xl'
+                }`} style={{ color: 'var(--color-text)' }}>
                   {player.averageScore.toFixed(1)}
                 </div>
                 <div className={`${
-                  isLandscape ? 'text-xs' : 'text-sm lg:text-lg xl:text-xl'
-                }`} style={{ color: '#333' }}>Average</div>
+                  isLandscape ? 'text-sm' : 'text-base lg:text-xl xl:text-2xl'
+                }`} style={{ color: 'var(--color-text-secondary)' }}>Average</div>
               </div>
             </div>
 
             {/* Recent Throws - Flexible height */}
-            <div className={`flex-1 flex flex-col ${
+            <div className={`flex-1 flex flex-col min-h-0 ${
               isLandscape ? 'pt-2' : 'pt-4'
             }`} style={{ borderTop: '1px solid var(--color-border)' }}>
               <div className={`font-semibold text-center ${
                 isLandscape ? 'text-base mb-2' : 'text-2xl lg:text-3xl xl:text-4xl mb-4'
-              }`} style={{ color: '#333' }}>Recent Throws</div>
+              }`} style={{ color: 'var(--color-text-secondary)' }}>Recent Throws</div>
               <div
-                className="flex-1 overflow-y-hidden"
+                className="flex-1 overflow-y-hidden min-h-0"
                 ref={player.id === 1 ? player1HistoryRef : player2HistoryRef}
                 style={{ height: '100%' }}
               >
@@ -298,7 +295,11 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
         ))}
       </div>
 
-
+      <LegWonPopup
+        isVisible={!!gameState.pendingNextLeg && !!gameState.lastLegResult}
+        winnerName={gameState.lastLegResult?.winnerName || ''}
+        legAverage={gameState.lastLegResult?.legAverage || 0}
+      />
     </div>
   );
 };

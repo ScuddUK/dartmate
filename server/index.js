@@ -5,6 +5,12 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import sessionManager, { createSession, getSession, addClientToSession, removeClientFromAllSessions, recordJoinAttempt, cleanupExpiredSessions } from './sessionManager.js';
+import dotenv from 'dotenv';
+import { RealisticDartBot } from './realisticDartBot.js';
+
+dotenv.config(); 
+
+const BOT_THINK_MS = 2500;
 
 // Simple DartBot implementation for server
 class SimpleDartBot {
@@ -372,6 +378,10 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (_req, res) => {
+  res.json({ ok: true });
+});
+
 // Serve static files in production (check multiple ways to detect production)
 const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
 const isProduction = nodeEnv === 'production' || process.env.RENDER;
@@ -393,6 +403,14 @@ if (isProduction) {
   });
 } else {
   console.log('🔧 Development mode - not serving static files');
+  app.get('/', (req, res) => {
+    const accept = (req.headers.accept || '').toString();
+    if (accept.includes('text/html')) {
+      res.redirect(302, 'http://localhost:3000/');
+      return;
+    }
+    res.json({ ok: true, message: 'Server running. Start UI at http://localhost:3000/' });
+  });
 }
 
 // Default template for non-session legacy (will be unused after pairing rollout)
@@ -430,7 +448,6 @@ let dartBotInstances = {
   2: null
 };
 
-// Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   console.log('Current game state:', JSON.stringify(gameState, null, 2));
@@ -443,6 +460,175 @@ io.on('connection', (socket) => {
     console.log('Game state requested by:', socket.id);
     socket.emit('gameState', gameState);
   });
+
+  const LEG_SHOT_POPUP_MS = 5000;
+
+  const updateTotalsForTurn = (player, turnScore) => {
+    if (typeof turnScore !== 'number') return;
+    player.totalThrows = (player.totalThrows || 0) + 1;
+    player.totalScore = (player.totalScore || 0) + turnScore;
+    player.matchAverageScore = Math.round(((player.totalScore || 0) / (player.totalThrows || 1)) * 100) / 100;
+
+    player.legTotalThrows = (player.legTotalThrows || 0) + 1;
+    player.legTotalScore = (player.legTotalScore || 0) + turnScore;
+    player.legAverageScore = Math.round(((player.legTotalScore || 0) / (player.legTotalThrows || 1)) * 100) / 100;
+  };
+
+  const resetLegTotals = (player) => {
+    player.legTotalScore = 0;
+    player.legTotalThrows = 0;
+    player.legAverageScore = 0;
+  };
+
+  const legsNeededToWin = (settings) =>
+    settings.gameFormat === 'bestOf' ? Math.ceil(settings.legsToWin / 2) : settings.legsToWin;
+
+  const setsNeededToWin = (settings) =>
+    settings.gameFormat === 'bestOf' ? Math.ceil(settings.setsToWin / 2) : settings.setsToWin;
+
+  const clearPendingLegTimeout = (session) => {
+    if (session && session.pendingLegTimeout) {
+      clearTimeout(session.pendingLegTimeout);
+      session.pendingLegTimeout = null;
+    }
+  };
+
+  const scheduleBotIfNeededInSession = (session, code) => {
+    const sGameState = session.gameState;
+    const current = sGameState.players.find(p => p.id === sGameState.currentPlayer);
+    if (!current || !current.isBot) return;
+    setTimeout(() => {
+      const latestSession = getSession(code);
+      if (!latestSession) return;
+      const gs = latestSession.gameState;
+      if (gs.gameWon || gs.pendingNextLeg) return;
+      const botPlayer = gs.players.find(p => p.id === gs.currentPlayer);
+      if (!botPlayer || !botPlayer.isBot) return;
+      const botInstance = latestSession.dartBotInstances[botPlayer.id] || latestSession.dartBotInstances[2];
+      const turnScore = botInstance ? botInstance.generateTurn(botPlayer.score, gs.settings) : Math.max(0, Math.min(180, Math.round(gs.settings.dartBot?.averageScore ?? 50)));
+      const previousScore = botPlayer.score;
+      const newScore = previousScore - turnScore;
+
+      const isBust = newScore < 0 || newScore === 1 || (newScore === 0 && (turnScore % 2 === 1));
+      if (isBust) {
+        const bustRecord = {
+          score: 'bust',
+          timestamp: new Date(),
+          remainingScore: previousScore,
+          playerId: botPlayer.id,
+          previousScore
+        };
+        botPlayer.throws.push(bustRecord);
+        gs.throwHistory.push(bustRecord);
+        if (botPlayer.throws.length > 10) botPlayer.throws = botPlayer.throws.slice(-10);
+        if (gs.throwHistory.length > 50) gs.throwHistory = gs.throwHistory.slice(-50);
+        io.to(code).emit('bust', { playerId: botPlayer.id });
+        gs.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
+        io.to(code).emit('gameState', gs);
+        return;
+      }
+
+      const throwDetails = {
+        score: turnScore,
+        playerId: botPlayer.id,
+        timestamp: new Date(),
+        previousScore,
+        remainingScore: newScore
+      };
+
+      botPlayer.throws.push(throwDetails);
+      gs.throwHistory.push(throwDetails);
+      updateTotalsForTurn(botPlayer, turnScore);
+      if (botPlayer.throws.length > 10) botPlayer.throws = botPlayer.throws.slice(-10);
+      if (gs.throwHistory.length > 50) gs.throwHistory = gs.throwHistory.slice(-50);
+
+      if (newScore === 0) {
+        botPlayer.score = 0;
+        handleLegWinInSession(latestSession, code, botPlayer);
+        return;
+      }
+
+      botPlayer.score = newScore;
+      updatePlayerAverage(botPlayer);
+      gs.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
+      io.to(code).emit('gameState', gs);
+    }, BOT_THINK_MS);
+  };
+
+  const startNextLegInSession = (session, code) => {
+    const sGameState = session.gameState;
+    if (!sGameState.pendingNextLeg) return;
+    sGameState.pendingNextLeg = false;
+    sGameState.lastLegResult = undefined;
+    clearPendingLegTimeout(session);
+
+    const start = sGameState.settings?.startingScore || 501;
+    sGameState.players.forEach(p => {
+      p.score = start;
+      p.throws = [];
+      p.averageScore = 0;
+      resetLegTotals(p);
+    });
+    sGameState.throwHistory = [];
+
+    io.to(code).emit('gameState', sGameState);
+    scheduleBotIfNeededInSession(session, code);
+  };
+
+  const handleLegWinInSession = (session, code, winnerPlayer) => {
+    const sGameState = session.gameState;
+
+    winnerPlayer.legsWon = (winnerPlayer.legsWon || 0) + 1;
+    const legsNeeded = legsNeededToWin(sGameState.settings);
+
+    if (sGameState.settings.setsEnabled) {
+      if (winnerPlayer.legsWon >= legsNeeded) {
+        winnerPlayer.setsWon = (winnerPlayer.setsWon || 0) + 1;
+        sGameState.players.forEach(p => { p.legsWon = 0; });
+        sGameState.currentSet++;
+
+        const setsNeeded = setsNeededToWin(sGameState.settings);
+        if (winnerPlayer.setsWon >= setsNeeded) {
+          sGameState.gameWon = true;
+          sGameState.winner = winnerPlayer;
+          io.to(code).emit('gameWon', { winner: winnerPlayer });
+          io.to(code).emit('gameState', sGameState);
+          return;
+        }
+      }
+    } else {
+      if (winnerPlayer.legsWon >= legsNeeded) {
+        sGameState.gameWon = true;
+        sGameState.winner = winnerPlayer;
+        io.to(code).emit('gameWon', { winner: winnerPlayer });
+        io.to(code).emit('gameState', sGameState);
+        return;
+      }
+    }
+
+    sGameState.pendingNextLeg = true;
+    sGameState.lastLegResult = {
+      winnerId: winnerPlayer.id,
+      winnerName: winnerPlayer.name,
+      legAverage: typeof winnerPlayer.legAverageScore === 'number' ? winnerPlayer.legAverageScore : 0,
+      showUntil: Date.now() + LEG_SHOT_POPUP_MS
+    };
+
+    sGameState.currentLeg++;
+    sGameState.legStartingPlayer = sGameState.legStartingPlayer === 1 ? 2 : 1;
+    sGameState.currentPlayer = sGameState.legStartingPlayer;
+
+    io.to(code).emit('legWon', sGameState.lastLegResult);
+    io.to(code).emit('gameState', sGameState);
+
+    clearPendingLegTimeout(session);
+    session.pendingLegTimeout = setTimeout(() => {
+      const latestSession = getSession(code);
+      if (!latestSession) return;
+      if (latestSession.gameState.gameWon) return;
+      startNextLegInSession(latestSession, code);
+    }, LEG_SHOT_POPUP_MS);
+  };
   
   // Create a new session and start game with settings (host/scoreboard)
   socket.on('startGameWithSettings', (settings) => {
@@ -455,7 +641,7 @@ io.on('connection', (socket) => {
       // Initialize DartBot for session
       const session = getSession(code);
       if (settings.dartBot?.enabled) {
-      session.dartBotInstances[2] = new SimpleDartBot(settings.dartBot.skillLevel, settings.dartBot.averageScore);
+      session.dartBotInstances[2] = new RealisticDartBot(settings.dartBot.skillLevel, settings.dartBot.averageScore);
         sessionGameState.players[1].isBot = true;
       }
 
@@ -517,9 +703,9 @@ io.on('connection', (socket) => {
       socket.emit('sessionError', { error: 'Too many attempts. Please wait and try again.' });
       return;
     }
-    // Accept exactly 8-character alphanumeric codes (upper/lower letters and digits)
-    if (typeof code !== 'string' || !/^[A-Za-z0-9]{8}$/.test(code)) {
-      socket.emit('sessionError', { error: 'Invalid code format.' });
+    // Accept exactly 5-digit numeric codes
+    if (typeof code !== 'string' || !/^\d{5}$/.test(code)) {
+      socket.emit('sessionError', { error: 'Invalid code format. Please enter a 5-digit number.' });
       return;
     }
     const session = getSession(code);
@@ -554,59 +740,23 @@ io.on('connection', (socket) => {
 
       // Initialize DartBot for the session if enabled
       if (sGameState.settings.dartBot?.enabled) {
-        session.dartBotInstances[2] = session.dartBotInstances[2] || new SimpleDartBot(sGameState.settings.dartBot.skillLevel, sGameState.settings.dartBot.averageScore);
+        session.dartBotInstances[2] = session.dartBotInstances[2] || new RealisticDartBot(sGameState.settings.dartBot.skillLevel, sGameState.settings.dartBot.averageScore);
         sGameState.players[1].isBot = true;
       }
 
       io.to(code).emit('gameState', sGameState);
 
-      // If starting player is a bot, trigger their throw using the bot model
-      const startingPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-      if (startingPlayer && startingPlayer.isBot) {
-        setTimeout(() => {
-          const botInstance = session.dartBotInstances[startingPlayer.id] || session.dartBotInstances[2];
-          const turnScore = botInstance ? botInstance.generateTurn(startingPlayer.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
-
-          const previousScore = startingPlayer.score;
-          const newScore = previousScore - turnScore;
-
-          const throwDetails = {
-            score: turnScore,
-            playerId: startingPlayer.id,
-            timestamp: new Date(),
-            previousScore,
-            remainingScore: Math.max(newScore, 0)
-          };
-
-          // Record on player and global histories
-          startingPlayer.throws.push(throwDetails);
-          sGameState.throwHistory.push(throwDetails);
-          // Update match-long totals
-          if (typeof throwDetails.score === 'number') {
-            startingPlayer.totalThrows = (startingPlayer.totalThrows || 0) + 1;
-            startingPlayer.totalScore = (startingPlayer.totalScore || 0) + throwDetails.score;
-            startingPlayer.matchAverageScore = Math.round(((startingPlayer.totalScore || 0) / (startingPlayer.totalThrows || 1)) * 100) / 100;
-          }
-
-          if (newScore < 0 || newScore === 1) {
-            io.to(code).emit('bust', { playerId: startingPlayer.id });
-            // No score change on bust
-          } else if (newScore === 0) {
-            sGameState.gameWon = true;
-            sGameState.winner = startingPlayer;
-            startingPlayer.score = 0;
-            io.to(code).emit('gameWon', { winner: startingPlayer });
-          } else {
-            startingPlayer.score = newScore;
-            updatePlayerAverage(startingPlayer);
-          }
-
-          // Switch to next player
-          sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-          io.to(code).emit('gameState', sGameState);
-        }, 1000);
-      }
+      scheduleBotIfNeededInSession(session, code);
     }
+  });
+
+  socket.on('startNextLegInSession', ({ code }) => {
+    const session = getSession(code);
+    if (!session) {
+      socket.emit('sessionError', { error: 'Session not found.' });
+      return;
+    }
+    startNextLegInSession(session, code);
   });
 
   // Reset game within a specific session (paired mobile/scoreboard flow)
@@ -617,6 +767,7 @@ io.on('connection', (socket) => {
       return;
     }
     const sGameState = session.gameState;
+    clearPendingLegTimeout(session);
     const start = sGameState.settings?.startingScore || 501;
     sGameState.players.forEach(player => {
       player.score = start;
@@ -627,6 +778,7 @@ io.on('connection', (socket) => {
       player.totalScore = 0;
       player.totalThrows = 0;
       player.matchAverageScore = 0;
+      resetLegTotals(player);
     });
     sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
     sGameState.legStartingPlayer = sGameState.legStartingPlayer || 1;
@@ -635,6 +787,8 @@ io.on('connection', (socket) => {
     sGameState.gameStarted = false;
     sGameState.gameWon = false;
     sGameState.winner = undefined;
+    sGameState.pendingNextLeg = false;
+    sGameState.lastLegResult = undefined;
     sGameState.throwHistory = [];
     // Do not auto-start; let client choose starter via setStartingPlayerInSession
     io.to(code).emit('gameState', sGameState);
@@ -648,6 +802,7 @@ io.on('connection', (socket) => {
       return;
     }
     const sGameState = session.gameState;
+    clearPendingLegTimeout(session);
 
     // Merge new settings
     sGameState.settings = { ...sGameState.settings, ...settings };
@@ -664,12 +819,13 @@ io.on('connection', (socket) => {
       player.totalScore = 0;
       player.totalThrows = 0;
       player.matchAverageScore = 0;
+      resetLegTotals(player);
       player.isBot = false;
     });
 
     // Configure DartBot for the session if enabled
     if (sGameState.settings.dartBot?.enabled) {
-      session.dartBotInstances[2] = new SimpleDartBot(sGameState.settings.dartBot.skillLevel, sGameState.settings.dartBot.averageScore);
+      session.dartBotInstances[2] = new RealisticDartBot(sGameState.settings.dartBot.skillLevel, sGameState.settings.dartBot.averageScore);
       sGameState.players[1].isBot = true;
     } else {
       session.dartBotInstances[2] = null;
@@ -683,6 +839,8 @@ io.on('connection', (socket) => {
     sGameState.gameStarted = false;
     sGameState.gameWon = false;
     sGameState.winner = undefined;
+    sGameState.pendingNextLeg = false;
+    sGameState.lastLegResult = undefined;
     sGameState.throwHistory = [];
     io.to(code).emit('gameState', sGameState);
     // Starter selection will be sent by client via setStartingPlayerInSession
@@ -696,11 +854,13 @@ io.on('connection', (socket) => {
       return;
     }
     const sGameState = session.gameState;
+    if (sGameState.pendingNextLeg) return;
     const player = sGameState.players.find(p => p.id === playerId);
     if (!player) return;
     const previousScore = player.score;
     const newScore = player.score - score;
-    if (newScore < 0) {
+    const isBust = newScore < 0 || newScore === 1 || (newScore === 0 && (score % 2 === 1));
+    if (isBust) {
       // Bust - record bust without changing score
       const bustRecord = {
         score: 'bust',
@@ -725,47 +885,7 @@ io.on('connection', (socket) => {
       io.to(code).emit('bust', { playerId });
       sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
       io.to(code).emit('gameState', sGameState);
-      // If next player is a bot, schedule their throw
-      const nextPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-      if (nextPlayer && nextPlayer.isBot) {
-        setTimeout(() => {
-          const botInstance = session.dartBotInstances[nextPlayer.id] || session.dartBotInstances[2];
-          const turnScore = botInstance ? botInstance.generateTurn(nextPlayer.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
-          const previousScore = nextPlayer.score;
-          const newScore2 = previousScore - turnScore;
-
-          const throwDetails2 = {
-            score: turnScore,
-            playerId: nextPlayer.id,
-            timestamp: new Date(),
-            previousScore,
-            remainingScore: Math.max(newScore2, 0)
-          };
-
-          nextPlayer.throws.push(throwDetails2);
-          sGameState.throwHistory.push(throwDetails2);
-          if (typeof throwDetails2.score === 'number') {
-            nextPlayer.totalThrows = (nextPlayer.totalThrows || 0) + 1;
-            nextPlayer.totalScore = (nextPlayer.totalScore || 0) + throwDetails2.score;
-            nextPlayer.matchAverageScore = Math.round(((nextPlayer.totalScore || 0) / (nextPlayer.totalThrows || 1)) * 100) / 100;
-          }
-
-          if (newScore2 < 0 || newScore2 === 1) {
-            io.to(code).emit('bust', { playerId: nextPlayer.id });
-          } else if (newScore2 === 0) {
-            sGameState.gameWon = true;
-            sGameState.winner = nextPlayer;
-            nextPlayer.score = 0;
-            io.to(code).emit('gameWon', { winner: nextPlayer });
-          } else {
-            nextPlayer.score = newScore2;
-          }
-
-          // Switch back to the other player after bot's turn
-          sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-          io.to(code).emit('gameState', sGameState);
-        }, 1000);
-      }
+      scheduleBotIfNeededInSession(session, code);
       return;
     }
 
@@ -773,7 +893,7 @@ io.on('connection', (socket) => {
     const throwRecord = {
       score,
       timestamp: new Date(),
-      remainingScore: Math.max(newScore, 0),
+      remainingScore: newScore,
       playerId,
       previousScore: player.score
     };
@@ -781,12 +901,7 @@ io.on('connection', (socket) => {
     // Update histories
     player.throws.push(throwRecord);
     sGameState.throwHistory.push(throwRecord);
-    // Update match-long totals for valid throws
-    if (typeof throwRecord.score === 'number') {
-      player.totalThrows = (player.totalThrows || 0) + 1;
-      player.totalScore = (player.totalScore || 0) + throwRecord.score;
-      player.matchAverageScore = Math.round(((player.totalScore || 0) / (player.totalThrows || 1)) * 100) / 100;
-    }
+    updateTotalsForTurn(player, throwRecord.score);
 
     // Cap history sizes
     if (player.throws.length > 10) {
@@ -796,144 +911,9 @@ io.on('connection', (socket) => {
       sGameState.throwHistory = sGameState.throwHistory.slice(-50);
     }
 
-    if (newScore === 1) {
-      // 1 remaining is treated as bust in many rulesets; keep behavior consistent
-      io.to(code).emit('bust', { playerId });
-      // score already recorded; do not change player.score
-      updatePlayerAverage(player);
-      sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-      io.to(code).emit('gameState', sGameState);
-      // If next player is a bot, schedule their throw
-      const nextPlayer2 = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-      if (nextPlayer2 && nextPlayer2.isBot) {
-        setTimeout(() => {
-          const botInstance = session.dartBotInstances[nextPlayer2.id] || session.dartBotInstances[2];
-          const turnScore = botInstance ? botInstance.generateTurn(nextPlayer2.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
-          const previousScore = nextPlayer2.score;
-          const newScore2 = previousScore - turnScore;
-
-          const throwDetails2 = {
-            score: turnScore,
-            playerId: nextPlayer2.id,
-            timestamp: new Date(),
-            previousScore,
-            remainingScore: Math.max(newScore2, 0)
-          };
-
-          nextPlayer2.throws.push(throwDetails2);
-          sGameState.throwHistory.push(throwDetails2);
-          if (typeof throwDetails2.score === 'number') {
-            nextPlayer2.totalThrows = (nextPlayer2.totalThrows || 0) + 1;
-            nextPlayer2.totalScore = (nextPlayer2.totalScore || 0) + throwDetails2.score;
-            nextPlayer2.matchAverageScore = Math.round(((nextPlayer2.totalScore || 0) / (nextPlayer2.totalThrows || 1)) * 100) / 100;
-          }
-
-          if (newScore2 < 0 || newScore2 === 1) {
-            io.to(code).emit('bust', { playerId: nextPlayer2.id });
-          } else if (newScore2 === 0) {
-            sGameState.gameWon = true;
-            sGameState.winner = nextPlayer2;
-            nextPlayer2.score = 0;
-            io.to(code).emit('gameWon', { winner: nextPlayer2 });
-          } else {
-            nextPlayer2.score = newScore2;
-          }
-
-          // Switch back after bot's turn
-          sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-          io.to(code).emit('gameState', sGameState);
-        }, 1000);
-      }
-      return;
-    }
-
     if (newScore === 0) {
-      // Player wins the leg
-      player.legsWon = (player.legsWon || 0) + 1;
-
-      const legsNeeded = sGameState.settings.setsEnabled
-        ? (sGameState.settings.gameFormat === 'bestOf'
-            ? Math.ceil(sGameState.settings.legsToWin / 2)
-            : sGameState.settings.legsToWin)
-        : (sGameState.settings.gameFormat === 'bestOf'
-            ? Math.ceil(sGameState.settings.legsToWin / 2)
-            : sGameState.settings.legsToWin);
-
-      if (sGameState.settings.setsEnabled) {
-        if (player.legsWon >= legsNeeded) {
-          player.setsWon = (player.setsWon || 0) + 1;
-          // Reset legs for new set
-          sGameState.players.forEach(p => p.legsWon = 0);
-          sGameState.currentSet++;
-
-          const setsNeeded = sGameState.settings.gameFormat === 'bestOf'
-            ? Math.ceil(sGameState.settings.setsToWin / 2)
-            : sGameState.settings.setsToWin;
-
-          if (player.setsWon >= setsNeeded) {
-            // Match victory
-            sGameState.gameWon = true;
-            sGameState.winner = player;
-            player.score = 0;
-            io.to(code).emit('gameWon', { winner: player });
-            return;
-          }
-        }
-      } else {
-        if (player.legsWon >= legsNeeded) {
-          // Match victory (no sets)
-          sGameState.gameWon = true;
-          sGameState.winner = player;
-          player.score = 0;
-          io.to(code).emit('gameWon', { winner: player });
-          return;
-        }
-      }
-
-      // Leg finished but match continues — reset for next leg
-      sGameState.players.forEach(p => {
-        p.score = sGameState.settings.startingScore;
-        p.throws = [];
-      });
-      sGameState.legStartingPlayer = sGameState.legStartingPlayer === 1 ? 2 : 1;
-      sGameState.currentPlayer = sGameState.legStartingPlayer;
-      sGameState.currentLeg++;
-      sGameState.throwHistory = [];
-
-      io.to(code).emit('gameState', sGameState);
-
-      // If new starting player is a bot, let them throw using the bot model
-      const newStarter = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-      if (newStarter && newStarter.isBot) {
-        setTimeout(() => {
-          const botInstance = session.dartBotInstances[newStarter.id] || session.dartBotInstances[2];
-          const botTurn = botInstance ? botInstance.generateTurn(newStarter.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
-          const prev = newStarter.score;
-          const next = prev - botTurn;
-          const t = { score: botTurn, timestamp: new Date(), remainingScore: Math.max(next, 0), playerId: newStarter.id, previousScore: prev };
-          newStarter.throws.push(t);
-          sGameState.throwHistory.push(t);
-          // Update match-long totals for bot throws
-          if (typeof t.score === 'number') {
-            newStarter.totalThrows = (newStarter.totalThrows || 0) + 1;
-            newStarter.totalScore = (newStarter.totalScore || 0) + t.score;
-            newStarter.matchAverageScore = Math.round(((newStarter.totalScore || 0) / (newStarter.totalThrows || 1)) * 100) / 100;
-          }
-          if (next < 0 || next === 1) {
-            io.to(code).emit('bust', { playerId: newStarter.id });
-          } else if (next === 0) {
-            sGameState.gameWon = true;
-            sGameState.winner = newStarter;
-            newStarter.score = 0;
-            io.to(code).emit('gameWon', { winner: newStarter });
-          } else {
-            newStarter.score = next;
-            updatePlayerAverage(newStarter);
-          }
-          sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-          io.to(code).emit('gameState', sGameState);
-        }, 1000);
-      }
+      player.score = 0;
+      handleLegWinInSession(session, code, player);
       return;
     }
 
@@ -942,37 +922,7 @@ io.on('connection', (socket) => {
     updatePlayerAverage(player);
     sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
     io.to(code).emit('gameState', sGameState);
-
-    // If next player is a bot, schedule their turn using the bot model
-    const nextPlayer = sGameState.players.find(p => p.id === sGameState.currentPlayer);
-    if (nextPlayer && nextPlayer.isBot) {
-      setTimeout(() => {
-        const botInstance = session.dartBotInstances[nextPlayer.id] || session.dartBotInstances[2];
-        const botTurn = botInstance ? botInstance.generateTurn(nextPlayer.score) : Math.max(0, Math.min(180, Math.round(sGameState.settings.dartBot?.averageScore ?? 50)));
-        const prev = nextPlayer.score;
-        const next = prev - botTurn;
-        const t = { score: botTurn, timestamp: new Date(), remainingScore: Math.max(next, 0), playerId: nextPlayer.id, previousScore: prev };
-        nextPlayer.throws.push(t);
-        sGameState.throwHistory.push(t);
-        if (typeof t.score === 'number') {
-          nextPlayer.totalThrows = (nextPlayer.totalThrows || 0) + 1;
-          nextPlayer.totalScore = (nextPlayer.totalScore || 0) + t.score;
-          nextPlayer.matchAverageScore = Math.round(((nextPlayer.totalScore || 0) / (nextPlayer.totalThrows || 1)) * 100) / 100;
-        }
-        if (next < 0 || next === 1) {
-          io.to(code).emit('bust', { playerId: nextPlayer.id });
-        } else if (next === 0) {
-          sGameState.gameWon = true;
-          sGameState.winner = nextPlayer;
-          nextPlayer.score = 0;
-          io.to(code).emit('gameWon', { winner: nextPlayer });
-        } else {
-          nextPlayer.score = next;
-        }
-        sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
-        io.to(code).emit('gameState', sGameState);
-      }, 1000);
-    }
+    scheduleBotIfNeededInSession(session, code);
   });
 
   // Undo last throw within a specific session
@@ -1004,6 +954,11 @@ io.on('connection', (socket) => {
           player.totalScore = Math.max(0, (player.totalScore || 0) - lastThrow.score);
           const denom = player.totalThrows || 1;
           player.matchAverageScore = Math.round(((player.totalScore || 0) / denom) * 100) / 100;
+
+          player.legTotalThrows = Math.max(0, (player.legTotalThrows || 0) - 1);
+          player.legTotalScore = Math.max(0, (player.legTotalScore || 0) - lastThrow.score);
+          const legDenom = player.legTotalThrows || 1;
+          player.legAverageScore = Math.round(((player.legTotalScore || 0) / legDenom) * 100) / 100;
         }
         // Update average
         updatePlayerAverage(player);
@@ -1036,7 +991,7 @@ io.on('connection', (socket) => {
       // Initialize DartBot if enabled (now that the game is starting)
       if (gameState.settings.dartBot?.enabled) {
         // Create bot instance for player 2 (since player 2 is the bot)
-    dartBotInstances[2] = new SimpleDartBot(gameState.settings.dartBot.skillLevel, gameState.settings.dartBot.averageScore);
+    dartBotInstances[2] = new RealisticDartBot(gameState.settings.dartBot.skillLevel, gameState.settings.dartBot.averageScore);
         console.log(`🤖 DartBot initialized for Player 2 with skill level ${gameState.settings.dartBot.skillLevel}`);
         // Mark Player 2 as bot for turn scheduling
         gameState.players[1].isBot = true;
@@ -1051,9 +1006,9 @@ io.on('connection', (socket) => {
       
       // If DartBot is the starting player and it's their turn, make them throw immediately
       if (gameState.currentPlayer === 1 && gameState.players[0].isBot) {
-        setTimeout(() => makeBotThrow(1), 1000);
+        setTimeout(() => makeBotThrow(1), BOT_THINK_MS);
       } else if (gameState.currentPlayer === 2 && gameState.players[1].isBot) {
-        setTimeout(() => makeBotThrow(2), 1000);
+        setTimeout(() => makeBotThrow(2), BOT_THINK_MS);
       }
     }
   });
@@ -1067,7 +1022,7 @@ io.on('connection', (socket) => {
       // Check if this would be a bust before recording anything
       const newScore = player.score - score;
       
-      if (newScore < 0) {
+      if (newScore < 0 || newScore === 1 || (newScore === 0 && (score % 2 === 1))) {
         // Bust - don't record the throw, just emit bust event
         socket.emit('bust', { playerId });
         
@@ -1105,7 +1060,7 @@ io.on('connection', (socket) => {
         // If next player is a bot, make them throw
         const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
         if (nextPlayer && nextPlayer.isBot) {
-          setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+          setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
         }
         return;
       }
@@ -1175,7 +1130,7 @@ io.on('connection', (socket) => {
               // Check if the new starting player is a bot and make them throw
               const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
               if (newStartingPlayer && newStartingPlayer.isBot) {
-                setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+                setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
               }
               return;
             }
@@ -1201,7 +1156,7 @@ io.on('connection', (socket) => {
         // Check if the new starting player is a bot and make them throw
         const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
         if (newStartingPlayer && newStartingPlayer.isBot) {
-          setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+          setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
         }
         return;
       }
@@ -1223,7 +1178,7 @@ io.on('connection', (socket) => {
       console.log(`🎯 Next player: ${nextPlayer?.name} (ID: ${nextPlayer?.id}), isBot: ${nextPlayer?.isBot}`);
       if (nextPlayer && nextPlayer.isBot) {
         console.log(`🤖 Scheduling bot throw for player ${gameState.currentPlayer}`);
-        setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+        setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
       } else {
         console.log(`👤 Next player is human or not found`);
       }
@@ -1350,14 +1305,14 @@ function makeBotThrow(playerId) {
   console.log(`DartBot (Player ${playerId}) is throwing...`);
   
   // Generate bot turn score
-  const turnScore = botInstance.generateTurn(player.score);
+  const turnScore = botInstance.generateTurn(player.score, gameState.settings);
   
   // Simulate the throw with a delay for realism
   setTimeout(() => {
     // Check if this would be a bust before recording anything
     const newScore = player.score - turnScore;
     
-    if (newScore < 0 || newScore === 1) {
+    if (newScore < 0 || newScore === 1 || (newScore === 0 && (turnScore % 2 === 1))) {
       // Bust - don't record the throw, just emit bust event
       io.emit('bust', { playerId });
       
@@ -1395,7 +1350,7 @@ function makeBotThrow(playerId) {
       // If next player is also a bot, make them throw
       const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
       if (nextPlayer && nextPlayer.isBot) {
-        setTimeout(() => makeBotThrow(gameState.currentPlayer), 2000);
+        setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
       }
       
       return;
@@ -1466,7 +1421,7 @@ function makeBotThrow(playerId) {
             // Check if the new starting player is a bot and make them throw
             const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
             if (newStartingPlayer && newStartingPlayer.isBot) {
-              setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+              setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
             }
             return;
           }
@@ -1492,7 +1447,7 @@ function makeBotThrow(playerId) {
       // Check if the new starting player is a bot and make them throw
       const newStartingPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
       if (newStartingPlayer && newStartingPlayer.isBot) {
-        setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+        setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
       }
       return;
     }
@@ -1512,9 +1467,9 @@ function makeBotThrow(playerId) {
     // If next player is a bot, make them throw
     const nextPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
     if (nextPlayer && nextPlayer.isBot) {
-      setTimeout(() => makeBotThrow(gameState.currentPlayer), 1000);
+      setTimeout(() => makeBotThrow(gameState.currentPlayer), BOT_THINK_MS);
     }
-  }, 1500); // 1.5 second delay to simulate thinking/throwing time
+  }, BOT_THINK_MS);
 }
 
 const PORT = process.env.PORT || 3001;

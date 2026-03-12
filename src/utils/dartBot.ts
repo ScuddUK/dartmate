@@ -134,7 +134,6 @@ export class DartBotEngine {
     let remainingScore = currentScore;
 
     for (let i = 0; i < 3; i++) {
-      const isLastThrow = i === 2;
       const isFinishingAttempt = remainingScore <= 170 && remainingScore > 1;
       
       const dartThrow = this.generateThrow(remainingScore, isFinishingAttempt);

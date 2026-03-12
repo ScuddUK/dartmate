@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode, type FC } from 'react';
 import { Theme, themes, defaultTheme } from '../types/theme';
 
 interface ThemeContextType {
@@ -21,7 +21,7 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+export const ThemeProvider: FC<ThemeProviderProps> = ({ children }) => {
   const [currentTheme, setCurrentTheme] = useState<Theme>(defaultTheme);
 
   // Monochrome default: no theme switching/persistence
@@ -46,10 +46,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     root.style.setProperty('--color-error', colors.error);
     root.style.setProperty('--color-border', colors.border);
     // Provide a subtle alpha variant for highlighting current player/panels
-    root.style.setProperty('--color-primary-alpha', 'rgba(17, 17, 17, 0.08)');
+    root.style.setProperty('--color-primary-alpha', 'rgba(11, 74, 161, 0.12)');
   }, [currentTheme]);
 
-  const setTheme = (theme: Theme) => {
+  const setTheme = (_theme: Theme) => {
     // No-op: theme switching disabled
     setCurrentTheme(defaultTheme);
   };

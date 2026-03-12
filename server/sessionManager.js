@@ -11,14 +11,13 @@ const ATTEMPT_WINDOW_MS = 60_000; // 1 minute
 const MAX_ATTEMPTS_PER_WINDOW = 10; // block brute force
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-function generateCode(length = 8) {
-  // Alphanumeric (upper+lower) excluding visually confusable characters
-  // Excludes: I, O, l, o, 0, 1
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+function generateCode(length = 5) {
+  // Numeric only for ease of mobile entry
+  const digits = '0123456789';
   let code = '';
   for (let i = 0; i < length; i++) {
-    const idx = crypto.randomInt(0, alphabet.length);
-    code += alphabet[idx];
+    const idx = crypto.randomInt(0, digits.length);
+    code += digits[idx];
   }
   return code;
 }
@@ -27,8 +26,8 @@ function createGameState(settings) {
   const startingScore = settings?.startingScore ?? 501;
   return {
     players: [
-      { id: 1, name: settings?.playerNames?.[0] ?? 'Player 1', score: startingScore, legsWon: 0, setsWon: 0, throws: [], averageScore: 0, isBot: false, totalScore: 0, totalThrows: 0, matchAverageScore: 0 },
-      { id: 2, name: settings?.playerNames?.[1] ?? 'Player 2', score: startingScore, legsWon: 0, setsWon: 0, throws: [], averageScore: 0, isBot: false, totalScore: 0, totalThrows: 0, matchAverageScore: 0 }
+      { id: 1, name: settings?.playerNames?.[0] ?? 'Player 1', score: startingScore, legsWon: 0, setsWon: 0, throws: [], averageScore: 0, isBot: false, totalScore: 0, totalThrows: 0, matchAverageScore: 0, legTotalScore: 0, legTotalThrows: 0, legAverageScore: 0 },
+      { id: 2, name: settings?.playerNames?.[1] ?? 'Player 2', score: startingScore, legsWon: 0, setsWon: 0, throws: [], averageScore: 0, isBot: false, totalScore: 0, totalThrows: 0, matchAverageScore: 0, legTotalScore: 0, legTotalThrows: 0, legAverageScore: 0 }
     ],
     currentPlayer: 1,
     gameMode: String(startingScore),
@@ -47,7 +46,9 @@ function createGameState(settings) {
     currentSet: 1,
     legStartingPlayer: 1,
     gameWon: false,
-    winner: undefined
+    winner: undefined,
+    pendingNextLeg: false,
+    lastLegResult: undefined
   };
 }
 
@@ -55,12 +56,12 @@ export function createSession(settings) {
   // Ensure uniqueness for both primary and master codes
   let code;
   do {
-    code = generateCode(8);
+    code = generateCode(5);
   } while (sessions.has(code));
 
   let masterCode;
   do {
-    masterCode = generateCode(8);
+    masterCode = generateCode(8); // Keep master code longer/alphanumeric
   } while (masterCodes.has(masterCode) || sessions.has(masterCode));
 
   const gameState = createGameState(settings);

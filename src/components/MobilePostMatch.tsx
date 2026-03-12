@@ -27,7 +27,7 @@ export const MobilePostMatch: React.FC<MobilePostMatchProps> = ({ winnerName, wi
         <button
           onClick={onChangeSettings}
           className="w-full rounded-lg py-3 font-semibold"
-          style={{ backgroundColor: 'var(--color-secondary)', color: 'var(--color-background)' }}
+          style={{ backgroundColor: 'var(--color-secondary)', color: 'var(--color-text)' }}
         >
           ⚙️ Change Game Settings
         </button>

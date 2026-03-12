@@ -7,31 +7,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        dart: {
-          green: '#2D5016',
-          red: '#8B0000',
-          gold: '#FFD700',
-          dark: '#1a1a1a',
-        },
-        theme: {
-          primary: 'var(--color-primary)',
-          secondary: 'var(--color-secondary)',
-          accent: 'var(--color-accent)',
-          background: 'var(--color-background)',
-          surface: 'var(--color-surface)',
-          text: 'var(--color-text)',
-          'text-secondary': 'var(--color-text-secondary)',
-          success: 'var(--color-success)',
-          warning: 'var(--color-warning)',
-          error: 'var(--color-error)',
-          border: 'var(--color-border)',
-        }
+        'dart-gold': '#FFD700', // Gold color
+        'dart-dark': '#1a1a1a', // Dark background
+        'dart-red': '#E53E3E', // Red color
       },
       fontFamily: {
-        'mono': ['JetBrains Mono', 'monospace'],
-        'score': ['Consolas', 'Monaco', 'Lucida Console', 'Liberation Mono', 'DejaVu Sans Mono', 'Bitstream Vera Sans Mono', 'Courier New', 'monospace'],
-        'main-score': ['Fjalla One', 'sans-serif'],
-      }
+        'mono': ['"JetBrains Mono"', 'monospace'],
+      },
     },
   },
   plugins: [],

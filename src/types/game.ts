@@ -12,6 +12,10 @@ export interface Player {
   totalScore?: number;
   totalThrows?: number;
   matchAverageScore?: number;
+  // Leg-only cumulative stats
+  legTotalScore?: number;
+  legTotalThrows?: number;
+  legAverageScore?: number;
 }
 
 export interface ThrowRecord {
@@ -52,4 +56,11 @@ export interface GameState {
   legStartingPlayer: number; // Tracks who should start each leg (alternates)
   gameWon?: boolean;
   winner?: Player;
+  pendingNextLeg?: boolean;
+  lastLegResult?: {
+    winnerId: number;
+    winnerName: string;
+    legAverage: number;
+    showUntil: number;
+  };
 }

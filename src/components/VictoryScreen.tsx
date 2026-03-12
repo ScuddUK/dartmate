@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type FC } from 'react';
 import { GameState, Player } from '../types/game';
-import { useTheme } from '../contexts/ThemeContext';
 
 interface VictoryScreenProps {
   gameState: GameState;
 }
 
-export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
-  const { currentTheme } = useTheme();
+export const VictoryScreen: FC<VictoryScreenProps> = ({ gameState }) => {
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   useEffect(() => {
@@ -33,8 +31,9 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
       return player.matchAverageScore;
     }
     if (player.throws.length === 0) return 0;
-    const validThrows = player.throws.filter(throwRecord => 
-      typeof throwRecord.score === 'number' && throwRecord.score >= 0
+    const validThrows = player.throws.filter(
+      (throwRecord): throwRecord is typeof throwRecord & { score: number } =>
+        typeof throwRecord.score === 'number' && throwRecord.score >= 0
     );
     if (validThrows.length === 0) return 0;
     const totalScore = validThrows.reduce((sum, throwRecord) => sum + throwRecord.score, 0);
@@ -44,9 +43,7 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState }) => {
   const winnerAverage = calculateTotalAverage(winner);
 
   // Dynamic viewport-based scaling
-  const isLandscape = screenSize.width > screenSize.height;
   const viewportMin = Math.min(screenSize.width, screenSize.height);
-  const viewportMax = Math.max(screenSize.width, screenSize.height);
   
   // Calculate scale factors based on viewport size
   const baseScale = viewportMin / 400; // Base scale factor

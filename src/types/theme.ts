@@ -20,25 +20,20 @@ export interface Theme {
 
 export const themes: Theme[] = [
   {
-    id: 'mono',
-    name: 'Monochrome',
+    id: 'dartmate',
+    name: 'Dart Mate',
     colors: {
-      // Text emphasis
-      primary: '#111111',       // near-black for primary accents
-      secondary: '#333333',     // dark gray for hover/secondary accents
-      accent: '#000000',        // pure black for strong accents/buttons
-      // Surfaces
-      background: '#f7f7f7',    // off-white page background
-      surface: '#f2f2f2',       // light gray panels/cards
-      // Text colors
-      text: '#111111',
-      textSecondary: '#333333',
-      // Status (kept grayscale per request)
-      success: '#222222',
-      warning: '#2a2a2a',
-      error: '#2f2f2f',
-      // Borders
-      border: '#dddddd'
+      primary: '#0B4AA1',
+      secondary: '#F2B705',
+      accent: '#FFCC00',
+      background: '#F5F9FF',
+      surface: '#FFFFFF',
+      text: '#07162D',
+      textSecondary: '#2A3B55',
+      success: '#1F8A70',
+      warning: '#F2B705',
+      error: '#D72638',
+      border: '#D6E2F2'
     }
   }
 ];

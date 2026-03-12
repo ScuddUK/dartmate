@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSocket } from './hooks/useSocket';
 import Scoreboard from './components/Scoreboard';
 import MobileInput from './components/MobileInput';
@@ -14,16 +14,16 @@ import { LegStartPopup } from './components/LegStartPopup';
 import { GameSettings as GameSettingsType } from './types/game';
 import { ThemeProvider } from './contexts/ThemeContext';
 
+
 function AppContent() {
   console.log('🎯 App component initializing...');
   const [viewMode, setViewMode] = useState<'menu' | 'settings' | 'scoreboard' | 'mobile'>('menu');
   const [showPairCodeModal, setShowPairCodeModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showLegStartPopup, setShowLegStartPopup] = useState(false);
-  const [lastLegNumber, setLastLegNumber] = useState(1);
-  const { gameState, connected, submitScore, undoLastThrow, resetGame, startGame, updatePlayerName, startGameWithSettings, applySettingsAndRestart, setStartingPlayer, pairCode, masterCode, joinSession, sessionError, sessionCode, connectionStatus, requestGameState } = useSocket();
+  const { gameState, connected, submitScore, undoLastThrow, resetGame, applySettingsAndRestart, setStartingPlayer, startNextLeg, pairCode, joinSession, sessionError, sessionCode, connectionStatus } = useSocket();
   // connectionStatus is provided by the socket hook; used to auto-close pairing modal
-  
+
   console.log('📊 App state:', { gameState: !!gameState, connected, viewMode, sessionCode });
 
   // Add a timeout for loading state to prevent infinite loading
@@ -41,13 +41,6 @@ function AppContent() {
       setViewMode('mobile');
     }
   }, [sessionCode, viewMode]);
-
-  // If scoreboard is visible but no game state yet, request it
-  useEffect(() => {
-    if (viewMode === 'scoreboard' && !gameState) {
-      requestGameState();
-    }
-  }, [viewMode, gameState]);
 
   // Close PairCodeModal automatically when a client joins the session
   useEffect(() => {
@@ -87,8 +80,6 @@ function AppContent() {
       setViewMode('mobile');
     } else {
       setViewMode('scoreboard');
-      // Proactively request game state so the scoreboard doesn't hang
-      requestGameState();
     }
   };
 
@@ -201,18 +192,17 @@ function AppContent() {
 
       {/* Pair code badge (top-left) remains visible on scoreboard */}
       {viewMode === 'scoreboard' && pairCode && (
-        <div className="fixed top-4 left-4 z-50 px-3 py-2 rounded-lg shadow" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
-          Pair Code: <span className="font-mono font-bold">{pairCode}</span>
+        <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
+          <div className="px-3 py-2 rounded-lg shadow flex items-center gap-2" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
+            Pair Code: <span className="font-mono font-bold">{pairCode}</span>
+          </div>
+
         </div>
       )}
 
       {viewMode === 'scoreboard' ? (
         gameState ? (
-          <Scoreboard 
-            gameState={gameState}
-            onResetGame={resetGame}
-            onStartGame={startGame}
-          />
+          <Scoreboard gameState={gameState} />
         ) : (
           <div className="text-center p-8" style={{ color: 'var(--color-text)' }}>Preparing game…</div>
         )
@@ -222,6 +212,7 @@ function AppContent() {
             gameState={gameState}
             onSubmitScore={submitScore}
             onUndoLastThrow={undoLastThrow}
+            onStartNextLeg={startNextLeg}
           />
         ) : (
           <div className="text-center p-8" style={{ color: 'var(--color-text)' }}>Waiting to join session…</div>

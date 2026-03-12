@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { GameState, GameSettings } from '../types/game';
+import { GameState, GameSettings, Player } from '../types/game';
 
 export const useSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -205,6 +205,12 @@ export const useSocket = () => {
     }
   };
 
+  const startNextLeg = () => {
+    if (socket && sessionCode) {
+      socket.emit('startNextLegInSession', { code: sessionCode });
+    }
+  };
+
   return {
     gameState,
     connected,
@@ -221,6 +227,7 @@ export const useSocket = () => {
     startGameWithSettings,
     applySettingsAndRestart,
     setStartingPlayer,
+    startNextLeg,
     joinSession,
     requestPairCode
     ,requestGameState

@@ -26,7 +26,7 @@ const PairCodeModal: React.FC<PairCodeModalProps> = ({ code, onClose }) => {
         </div>
         <ul className="text-sm text-gray-600 list-disc pl-5 mb-4">
           <li>On the mobile device, tap "Mobile Scorer" and enter this code.</li>
-          <li>The code is 8 characters, letters and numbers only.</li>
+          <li>The code is 5 digits long for easy entry.</li>
         </ul>
         <button
           className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
