@@ -102,10 +102,12 @@ const Scoreboard: FC<ScoreboardProps> = ({
           </div>
         );
       }
-      const previousTotal = i === 0 ? 501 : (501 - throws.slice(0, throws.indexOf(throwRecord)).reduce((sum, t) => {
-        return sum + (typeof t.score === 'number' ? t.score : 0);
-      }, 0));
-      const newTotal = throwRecord.remainingScore;
+      const previousTotal = typeof throwRecord.previousScore === 'number'
+        ? throwRecord.previousScore
+        : (gameState.settings?.startingScore || 501);
+      const newTotal = typeof throwRecord.remainingScore === 'number'
+        ? throwRecord.remainingScore
+        : previousTotal;
       const isBust = throwRecord.score === 'bust';
       const displayScore = typeof throwRecord.score === 'string'
         ? throwRecord.score.toUpperCase()
@@ -156,8 +158,28 @@ const Scoreboard: FC<ScoreboardProps> = ({
     });
   };
 
+  const tournament = gameState.tournament;
+  const currentTournamentMatch = tournament?.matches?.[tournament.currentMatchIndex];
+  const getThrowerNameForPlayer = (playerId: number) => {
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player) return '';
+    if (gameState.currentPlayer === playerId) {
+      return gameState.currentThrowerName || player.rotationMembers?.[player.rotationIndex ?? 0] || player.name;
+    }
+    return player.rotationMembers?.[player.rotationIndex ?? 0] || player.name;
+  };
+
   return (
     <div className="h-screen box-border p-4 flex flex-col" style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text)' }}>
+      {tournament?.enabled && (
+        currentTournamentMatch?.label ? (
+          <div className={`text-center ${isLandscape ? 'mb-2' : 'mb-4'}`}>
+            <div className={`${isLandscape ? 'text-base' : 'text-lg lg:text-2xl'} font-bold`} style={{ color: 'var(--color-text-secondary)' }}>
+              {currentTournamentMatch.label}
+            </div>
+          </div>
+        ) : null
+      )}
       {/* Game Info */}
       {gameState.settings && (
         <div className={`text-center ${isLandscape ? 'mb-3' : 'mb-6'}`}>
@@ -205,8 +227,13 @@ const Scoreboard: FC<ScoreboardProps> = ({
                 isLandscape ? 'text-xl' : 'text-3xl lg:text-5xl xl:text-6xl'
               }`}
               style={{ color: 'var(--color-text)' }}>
-                {player.name}
+                {player.name}{tournament?.enabled ? ` (${tournament.teamPoints?.[player.id - 1] ?? 0})` : ''}
               </h2>
+              {tournament?.enabled && (
+                <div className={`${isLandscape ? 'text-lg' : 'text-2xl lg:text-4xl'} font-bold`} style={{ color: 'var(--color-primary)' }}>
+                  {getThrowerNameForPlayer(player.id)}
+                </div>
+              )}
             </div>
 
             {/* Current Score */}

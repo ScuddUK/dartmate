@@ -40,7 +40,8 @@ function createGameState(settings) {
       setsEnabled: settings?.setsEnabled ?? false,
       setsToWin: settings?.setsToWin ?? 3,
       playerNames: settings?.playerNames ?? ['Player 1', 'Player 2'],
-      dartBot: settings?.dartBot ?? { enabled: false, skillLevel: 5, averageScore: 65, name: 'DartBot' }
+      dartBot: settings?.dartBot ?? { enabled: false, skillLevel: 5, averageScore: 65, name: 'DartBot' },
+      tournament: settings?.tournament
     },
     currentLeg: 1,
     currentSet: 1,

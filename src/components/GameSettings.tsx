@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { GameSettings } from '../types/game';
+import { GameSettings, type TournamentConfig } from '../types/game';
+import TournamentSettings from './TournamentSettings';
 
 interface GameSettingsProps {
   onStartGame: (settings: GameSettings) => void;
@@ -21,13 +22,42 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
     }
   });
 
+  const defaultTournamentConfig: TournamentConfig = {
+    enabled: true,
+    teamNames: ['TEAM 1', 'TEAM 2'],
+    rosters: [[''], ['']],
+    matches: [
+      { id: 'doubles-1', type: 'doubles', label: 'Doubles 1', team1Players: ['', ''], team2Players: ['', ''], startingScore: 601, gameFormat: 'firstTo', legsToWin: 1, setsEnabled: false, setsToWin: 0 },
+      { id: 'doubles-2', type: 'doubles', label: 'Doubles 2', team1Players: ['', ''], team2Players: ['', ''], startingScore: 601, gameFormat: 'firstTo', legsToWin: 1, setsEnabled: false, setsToWin: 0 },
+      { id: 'doubles-3', type: 'doubles', label: 'Doubles 3', team1Players: ['', ''], team2Players: ['', ''], startingScore: 601, gameFormat: 'firstTo', legsToWin: 1, setsEnabled: false, setsToWin: 0 },
+      { id: 'singles-1', type: 'singles', label: 'Singles 1', team1Players: [''], team2Players: [''], startingScore: 501, gameFormat: 'firstTo', legsToWin: 2, setsEnabled: false, setsToWin: 0 },
+      { id: 'singles-2', type: 'singles', label: 'Singles 2', team1Players: [''], team2Players: [''], startingScore: 501, gameFormat: 'firstTo', legsToWin: 2, setsEnabled: false, setsToWin: 0 },
+      { id: 'singles-3', type: 'singles', label: 'Singles 3', team1Players: [''], team2Players: [''], startingScore: 501, gameFormat: 'firstTo', legsToWin: 2, setsEnabled: false, setsToWin: 0 },
+      { id: 'singles-4', type: 'singles', label: 'Singles 4', team1Players: [''], team2Players: [''], startingScore: 501, gameFormat: 'firstTo', legsToWin: 2, setsEnabled: false, setsToWin: 0 },
+      { id: 'singles-5', type: 'singles', label: 'Singles 5', team1Players: [''], team2Players: [''], startingScore: 501, gameFormat: 'firstTo', legsToWin: 2, setsEnabled: false, setsToWin: 0 },
+      { id: 'singles-6', type: 'singles', label: 'Singles 6', team1Players: [''], team2Players: [''], startingScore: 501, gameFormat: 'firstTo', legsToWin: 2, setsEnabled: false, setsToWin: 0 },
+      { id: 'trebles-1', type: 'trebles', label: 'Trebles 1', team1Players: ['', '', ''], team2Players: ['', '', ''], startingScore: 701, gameFormat: 'firstTo', legsToWin: 1, setsEnabled: false, setsToWin: 0 },
+      { id: 'trebles-2', type: 'trebles', label: 'Trebles 2', team1Players: ['', '', ''], team2Players: ['', '', ''], startingScore: 701, gameFormat: 'firstTo', legsToWin: 1, setsEnabled: false, setsToWin: 0 }
+    ]
+  };
 
+  const [tournamentEnabled, setTournamentEnabled] = useState(false);
+  const [tournamentConfig, setTournamentConfig] = useState<TournamentConfig>(defaultTournamentConfig);
+
+  const isTournamentValid = (cfg: TournamentConfig) => {
+    if (!cfg.enabled) return false;
+    if (!cfg.teamNames?.[0]?.trim() || !cfg.teamNames?.[1]?.trim()) return false;
+    const rosterOk = (cfg.rosters?.[0] || []).some(n => n.trim()) && (cfg.rosters?.[1] || []).some(n => n.trim());
+    if (!rosterOk) return false;
+    return (cfg.matches || []).every(m => (m.team1Players || []).every(p => p.trim()) && (m.team2Players || []).every(p => p.trim()));
+  };
 
   const handlePlayerNameChange = (index: 0 | 1, name: string) => {
     const newNames = [...settings.playerNames] as [string, string];
     newNames[index] = name.toUpperCase();
     setSettings({ ...settings, playerNames: newNames });
   };
+
 
   // Calculate DartBot average score based on skill level (1-10 = 20-110 average)
   const calculateBotAverageScore = (skillLevel: number): number => {
@@ -58,6 +88,26 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
   };
 
   const handleStartGame = () => {
+    if (tournamentEnabled) {
+      const cfg: TournamentConfig = {
+        ...tournamentConfig,
+        enabled: true,
+        teamNames: [tournamentConfig.teamNames[0].toUpperCase(), tournamentConfig.teamNames[1].toUpperCase()],
+        rosters: [
+          (tournamentConfig.rosters[0] || []).map(n => n.toUpperCase()),
+          (tournamentConfig.rosters[1] || []).map(n => n.toUpperCase())
+        ],
+        matches: (tournamentConfig.matches || []).map(m => ({
+          ...m,
+          team1Players: (m.team1Players || []).map(p => p.toUpperCase()),
+          team2Players: (m.team2Players || []).map(p => p.toUpperCase())
+        }))
+      };
+      if (!isTournamentValid(cfg)) return;
+      onStartGame({ ...settings, dartBot: { ...settings.dartBot, enabled: false }, tournament: cfg });
+      return;
+    }
+
     const player1Valid = settings.playerNames[0].trim();
     const player2Valid = settings.dartBot.enabled || settings.playerNames[1].trim();
     
@@ -81,6 +131,37 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
         </div>
 
         <div className="rounded-xl p-8 space-y-8" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>Tournament Mode</h2>
+              <button
+                onClick={() => {
+                  setTournamentEnabled(!tournamentEnabled);
+                  if (!tournamentEnabled) {
+                    setSettings({ ...settings, dartBot: { ...settings.dartBot, enabled: false } });
+                  }
+                }}
+                className="relative inline-flex h-8 w-14 items-center rounded-full transition-colors"
+                style={tournamentEnabled ? { backgroundColor: 'var(--color-primary)' } : { backgroundColor: 'var(--color-border)' }}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    tournamentEnabled ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              3 Doubles (601, 1 leg) • 6 Singles (501, first to 2) • 2 Trebles (701, 1 leg)
+            </p>
+          </div>
+
+          {tournamentEnabled && (
+            <TournamentSettings value={tournamentConfig} onChange={setTournamentConfig} />
+          )}
+
+          {!tournamentEnabled && (
+            <>
           {/* Player Names */}
           <div>
             <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-primary)' }}>Players</h2>
@@ -279,11 +360,14 @@ const GameSettingsComponent: React.FC<GameSettingsProps> = ({ onStartGame }) => 
 
           {/* Theme selection removed per request */}
 
+            </>
+          )}
+
           {/* Start Game Button */}
           <div className="pt-6">
             <button
               onClick={handleStartGame}
-              disabled={!settings.playerNames[0].trim() || (!settings.dartBot.enabled && !settings.playerNames[1].trim())}
+              disabled={tournamentEnabled ? !isTournamentValid(tournamentConfig) : (!settings.playerNames[0].trim() || (!settings.dartBot.enabled && !settings.playerNames[1].trim()))}
               className="w-full py-4 px-6 text-white font-bold text-xl rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:opacity-95"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >

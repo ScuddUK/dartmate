@@ -486,6 +486,96 @@ io.on('connection', (socket) => {
     player.legAverageScore = 0;
   };
 
+  const buildTournamentState = (cfg) => ({
+    ...cfg,
+    currentMatchIndex: 0,
+    teamPoints: [0, 0],
+    results: []
+  });
+
+  const getTournamentMatch = (gs) => {
+    const t = gs?.tournament;
+    if (!t || !t.enabled) return null;
+    return t.matches?.[t.currentMatchIndex] || null;
+  };
+
+  const computeCurrentThrowerName = (gs) => {
+    const player = gs.players?.find(p => p.id === gs.currentPlayer);
+    if (!player) return undefined;
+    const members = player.rotationMembers;
+    if (!Array.isArray(members) || !members.length) return player.name;
+    const idx = typeof player.rotationIndex === 'number' ? player.rotationIndex : 0;
+    return members[(idx % members.length + members.length) % members.length] || player.name;
+  };
+
+  const advanceRotation = (player) => {
+    const members = player.rotationMembers;
+    if (!Array.isArray(members) || members.length <= 1) return;
+    const idx = typeof player.rotationIndex === 'number' ? player.rotationIndex : 0;
+    player.rotationIndex = (idx + 1) % members.length;
+  };
+
+  const regressRotation = (player) => {
+    const members = player.rotationMembers;
+    if (!Array.isArray(members) || members.length <= 1) return;
+    const idx = typeof player.rotationIndex === 'number' ? player.rotationIndex : 0;
+    player.rotationIndex = (idx - 1 + members.length) % members.length;
+  };
+
+  const applyTournamentMatch = (gs) => {
+    const t = gs?.tournament;
+    if (!t || !t.enabled) return false;
+    const match = getTournamentMatch(gs);
+    if (!match) return false;
+
+    const start = match.startingScore || 501;
+    gs.settings = {
+      ...gs.settings,
+      startingScore: start,
+      gameFormat: match.gameFormat,
+      legsToWin: match.legsToWin,
+      setsEnabled: match.setsEnabled,
+      setsToWin: match.setsToWin,
+      playerNames: [t.teamNames?.[0] || 'TEAM 1', t.teamNames?.[1] || 'TEAM 2'],
+      dartBot: { ...gs.settings.dartBot, enabled: false }
+    };
+
+    gs.players.forEach((player, idx) => {
+      player.teamId = (idx + 1);
+      player.name = gs.settings.playerNames[idx] || player.name;
+      player.rotationMembers = match.type === 'singles'
+        ? [idx === 0 ? (match.team1Players?.[0] || player.name) : (match.team2Players?.[0] || player.name)]
+        : (idx === 0 ? match.team1Players : match.team2Players);
+      player.rotationIndex = 0;
+
+      player.score = start;
+      player.legsWon = 0;
+      player.setsWon = 0;
+      player.throws = [];
+      player.averageScore = 0;
+      player.totalScore = 0;
+      player.totalThrows = 0;
+      player.matchAverageScore = 0;
+      resetLegTotals(player);
+      player.isBot = false;
+    });
+
+    gs.currentPlayer = 1;
+    gs.legStartingPlayer = 1;
+    gs.currentLeg = 1;
+    gs.currentSet = 1;
+    gs.gameStarted = true;
+    gs.gameWon = false;
+    gs.winner = undefined;
+    gs.pendingNextLeg = false;
+    gs.lastLegResult = undefined;
+    gs.throwHistory = [];
+    gs.gameMode = String(start);
+    gs.currentThrowerName = computeCurrentThrowerName(gs);
+
+    return true;
+  };
+
   const legsNeededToWin = (settings) =>
     settings.gameFormat === 'bestOf' ? Math.ceil(settings.legsToWin / 2) : settings.legsToWin;
 
@@ -597,6 +687,19 @@ io.on('connection', (socket) => {
         if (winnerPlayer.setsWon >= setsNeeded) {
           sGameState.gameWon = true;
           sGameState.winner = winnerPlayer;
+
+          if (sGameState.tournament?.enabled) {
+            const t = sGameState.tournament;
+            const match = getTournamentMatch(sGameState);
+            const teamId = winnerPlayer.teamId === 2 ? 2 : 1;
+            t.teamPoints = [t.teamPoints?.[0] ?? 0, t.teamPoints?.[1] ?? 0];
+            t.teamPoints[teamId - 1] = (t.teamPoints[teamId - 1] || 0) + 1;
+            if (match) {
+              t.results = [...(t.results || []), { matchId: match.id, matchLabel: match.label, winnerTeamId: teamId }];
+            }
+            sGameState.tournament = t;
+          }
+
           io.to(code).emit('gameWon', { winner: winnerPlayer });
           io.to(code).emit('gameState', sGameState);
           return;
@@ -606,6 +709,19 @@ io.on('connection', (socket) => {
       if (winnerPlayer.legsWon >= legsNeeded) {
         sGameState.gameWon = true;
         sGameState.winner = winnerPlayer;
+
+        if (sGameState.tournament?.enabled) {
+          const t = sGameState.tournament;
+          const match = getTournamentMatch(sGameState);
+          const teamId = winnerPlayer.teamId === 2 ? 2 : 1;
+          t.teamPoints = [t.teamPoints?.[0] ?? 0, t.teamPoints?.[1] ?? 0];
+          t.teamPoints[teamId - 1] = (t.teamPoints[teamId - 1] || 0) + 1;
+          if (match) {
+            t.results = [...(t.results || []), { matchId: match.id, matchLabel: match.label, winnerTeamId: teamId }];
+          }
+          sGameState.tournament = t;
+        }
+
         io.to(code).emit('gameWon', { winner: winnerPlayer });
         io.to(code).emit('gameState', sGameState);
         return;
@@ -644,15 +760,19 @@ io.on('connection', (socket) => {
       addClientToSession(code, socket.id);
       socket.join(code);
 
-      // Initialize DartBot for session
+      // Initialize DartBot / Tournament for session
       const session = getSession(code);
-      if (settings.dartBot?.enabled) {
-      session.dartBotInstances[2] = new RealisticDartBot(settings.dartBot.skillLevel, settings.dartBot.averageScore);
+      if (settings.tournament?.enabled) {
+        sessionGameState.tournament = buildTournamentState(settings.tournament);
+        applyTournamentMatch(sessionGameState);
+        session.dartBotInstances[2] = null;
+        sessionGameState.players[1].isBot = false;
+      } else if (settings.dartBot?.enabled) {
+        session.dartBotInstances[2] = new RealisticDartBot(settings.dartBot.skillLevel, settings.dartBot.averageScore);
         sessionGameState.players[1].isBot = true;
       }
 
-      // Do not auto-start the game; prompt scoreboard to choose first player
-      // Leave currentPlayer and legStartingPlayer at defaults, gameStarted remains false
+      // Tournament auto-starts; otherwise do not auto-start and allow starter selection
 
       // Broadcast to room and inform host of pair code
       console.log(`🔐 Emitting pairCode to host ${socket.id}: ${code} (admin ${masterCode})`);
@@ -722,9 +842,10 @@ io.on('connection', (socket) => {
     addClientToSession(code, socket.id);
     socket.join(code);
     socket.emit('sessionJoined', { code });
-    // Do not auto-start; allow mobile to choose starting player
     const sGameState = session.gameState;
-    sGameState.gameStarted = false;
+    if (!sGameState.tournament?.enabled) {
+      sGameState.gameStarted = false;
+    }
     socket.emit('gameState', sGameState);
     io.to(code).emit('gameState', sGameState);
     io.to(code).emit('connectionStatus', { status: 'client_joined', code, clients: session.clients.size });
@@ -743,6 +864,7 @@ io.on('connection', (socket) => {
       sGameState.currentPlayer = playerId;
       sGameState.legStartingPlayer = playerId;
       sGameState.gameStarted = true;
+      sGameState.currentThrowerName = computeCurrentThrowerName(sGameState);
 
       // Initialize DartBot for the session if enabled
       if (sGameState.settings.dartBot?.enabled) {
@@ -774,6 +896,19 @@ io.on('connection', (socket) => {
     }
     const sGameState = session.gameState;
     clearPendingLegTimeout(session);
+
+    if (sGameState.tournament?.enabled && sGameState.gameWon) {
+      const t = sGameState.tournament;
+      const lastIndex = (t.matches?.length || 0) - 1;
+      if (t.currentMatchIndex < lastIndex) {
+        t.currentMatchIndex += 1;
+        sGameState.tournament = t;
+        applyTournamentMatch(sGameState);
+        io.to(code).emit('gameState', sGameState);
+        return;
+      }
+    }
+
     const start = sGameState.settings?.startingScore || 501;
     sGameState.players.forEach(player => {
       player.score = start;
@@ -785,6 +920,7 @@ io.on('connection', (socket) => {
       player.totalThrows = 0;
       player.matchAverageScore = 0;
       resetLegTotals(player);
+      player.rotationIndex = 0;
     });
     sGameState.currentPlayer = sGameState.legStartingPlayer || 1;
     sGameState.legStartingPlayer = sGameState.legStartingPlayer || 1;
@@ -796,6 +932,7 @@ io.on('connection', (socket) => {
     sGameState.pendingNextLeg = false;
     sGameState.lastLegResult = undefined;
     sGameState.throwHistory = [];
+    sGameState.currentThrowerName = computeCurrentThrowerName(sGameState);
     // Do not auto-start; let client choose starter via setStartingPlayerInSession
     io.to(code).emit('gameState', sGameState);
   });
@@ -812,6 +949,17 @@ io.on('connection', (socket) => {
 
     // Merge new settings
     sGameState.settings = { ...sGameState.settings, ...settings };
+
+    if (settings.tournament?.enabled) {
+      sGameState.tournament = buildTournamentState(settings.tournament);
+      applyTournamentMatch(sGameState);
+      session.dartBotInstances[2] = null;
+      sGameState.players[1].isBot = false;
+      io.to(code).emit('gameState', sGameState);
+      return;
+    }
+
+    sGameState.tournament = undefined;
 
     // Apply player names and reset player stats
     const start = sGameState.settings?.startingScore || 501;
@@ -889,7 +1037,9 @@ io.on('connection', (socket) => {
 
       // Notify room and rotate player
       io.to(code).emit('bust', { playerId });
+      advanceRotation(player);
       sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+      sGameState.currentThrowerName = computeCurrentThrowerName(sGameState);
       io.to(code).emit('gameState', sGameState);
       scheduleBotIfNeededInSession(session, code);
       return;
@@ -926,7 +1076,9 @@ io.on('connection', (socket) => {
     // Regular valid throw
     player.score = newScore;
     updatePlayerAverage(player);
+    advanceRotation(player);
     sGameState.currentPlayer = sGameState.currentPlayer === 1 ? 2 : 1;
+    sGameState.currentThrowerName = computeCurrentThrowerName(sGameState);
     io.to(code).emit('gameState', sGameState);
     scheduleBotIfNeededInSession(session, code);
   });
@@ -969,7 +1121,9 @@ io.on('connection', (socket) => {
         // Update average
         updatePlayerAverage(player);
         // Set current player back to the one who made the undone throw
+        regressRotation(player);
         sGameState.currentPlayer = lastThrow.playerId;
+        sGameState.currentThrowerName = computeCurrentThrowerName(sGameState);
         io.to(code).emit('gameState', sGameState);
       }
     }

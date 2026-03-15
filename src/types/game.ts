@@ -1,3 +1,37 @@
+export type TournamentMatchType = 'doubles' | 'singles' | 'trebles';
+
+export interface TournamentMatchPlan {
+  id: string;
+  type: TournamentMatchType;
+  label: string;
+  team1Players: string[];
+  team2Players: string[];
+  startingScore: 501 | 601 | 701;
+  gameFormat: 'bestOf' | 'firstTo';
+  legsToWin: number;
+  setsEnabled: boolean;
+  setsToWin: number;
+}
+
+export interface TournamentConfig {
+  enabled: boolean;
+  teamNames: [string, string];
+  rosters: [string[], string[]];
+  matches: TournamentMatchPlan[];
+}
+
+export interface TournamentResult {
+  matchId: string;
+  matchLabel: string;
+  winnerTeamId: 1 | 2;
+}
+
+export interface TournamentState extends TournamentConfig {
+  currentMatchIndex: number;
+  teamPoints: [number, number];
+  results: TournamentResult[];
+}
+
 export interface Player {
   id: number;
   name: string;
@@ -8,6 +42,9 @@ export interface Player {
   throws: ThrowRecord[];
   isBot?: boolean;
   botSkillLevel?: number;
+  teamId?: 1 | 2;
+  rotationMembers?: string[];
+  rotationIndex?: number;
   // Match-long cumulative stats
   totalScore?: number;
   totalThrows?: number;
@@ -22,7 +59,9 @@ export interface ThrowRecord {
   score: number | 'bust';
   previousScore?: number;
   newScore?: number;
-  timestamp: number;
+  remainingScore?: number;
+  playerId?: number;
+  timestamp: number | string | Date;
   multiplier?: number;
   segment?: number;
 }
@@ -42,6 +81,7 @@ export interface GameSettings {
   setsToWin: number;
   playerNames: [string, string];
   dartBot: DartBotConfig;
+  tournament?: TournamentConfig;
 }
 
 export interface GameState {
@@ -54,6 +94,8 @@ export interface GameState {
   currentLeg: number;
   currentSet: number;
   legStartingPlayer: number; // Tracks who should start each leg (alternates)
+  currentThrowerName?: string;
+  tournament?: TournamentState;
   gameWon?: boolean;
   winner?: Player;
   pendingNextLeg?: boolean;

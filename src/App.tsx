@@ -10,6 +10,7 @@ import ConnectionStatus from './components/ConnectionStatus';
 import HamburgerMenu from './components/HamburgerMenu';
 import { VictoryScreen } from './components/VictoryScreen';
 import { MobilePostMatch } from './components/MobilePostMatch';
+import TournamentEndScreen from './components/TournamentEndScreen';
 import { LegStartPopup } from './components/LegStartPopup';
 import { GameSettings as GameSettingsType } from './types/game';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -123,31 +124,47 @@ function AppContent() {
 
   // Show victory screen if game is won
   if (gameState && gameState.gameWon && gameState.winner) {
-    if (viewMode === 'scoreboard') {
+    const t = gameState.tournament;
+    const isTournament = !!t?.enabled;
+    const isTournamentOver = isTournament && (t.currentMatchIndex >= ((t.matches?.length || 0) - 1));
+
+    if (isTournamentOver) {
       return (
-        <VictoryScreen 
-          gameState={gameState}
+        <TournamentEndScreen
+          teamNames={t.teamNames}
+          teamPoints={t.teamPoints}
         />
       );
     }
-    // Mobile post-match controls
-    const winner = gameState.winner;
-    const winnerAvg = typeof winner.matchAverageScore === 'number' && winner.matchAverageScore > 0
-      ? winner.matchAverageScore
-      : (() => {
-          const validThrows = (winner.throws || []).filter(t => typeof t.score === 'number');
-          if (!validThrows.length) return 0;
-          const total = validThrows.reduce((sum, t) => sum + (t.score as number), 0);
-          return total / validThrows.length;
-        })();
-    return (
-      <MobilePostMatch
-        winnerName={winner.name}
-        winnerAverage={winnerAvg}
-        onRestart={handleRestartMatch}
-        onChangeSettings={handleChangeSettingsFromMobile}
-      />
-    );
+
+    if (viewMode === 'scoreboard') {
+      if (!isTournament) {
+        return (
+          <VictoryScreen 
+            gameState={gameState}
+          />
+        );
+      }
+    } else {
+      const winner = gameState.winner;
+      const winnerAvg = typeof winner.matchAverageScore === 'number' && winner.matchAverageScore > 0
+        ? winner.matchAverageScore
+        : (() => {
+            const validThrows = (winner.throws || []).filter(t => typeof t.score === 'number');
+            if (!validThrows.length) return 0;
+            const total = validThrows.reduce((sum, t) => sum + (t.score as number), 0);
+            return total / validThrows.length;
+          })();
+      return (
+        <MobilePostMatch
+          winnerName={winner.name}
+          winnerAverage={winnerAvg}
+          primaryActionLabel={isTournament ? 'Next Match' : 'Start Again'}
+          onRestart={handleRestartMatch}
+          onChangeSettings={handleChangeSettingsFromMobile}
+        />
+      );
+    }
   }
 
   // Show settings whenever requested

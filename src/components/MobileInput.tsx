@@ -133,9 +133,14 @@ const MobileInput: FC<MobileInputProps> = ({
       {/* Current Player Display - Compact */}
       <div className="text-center py-2 flex-shrink-0">
         <div className="dart-display p-3 rounded-xl mx-4">
-          <div className="font-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: fonts.name }}>
-            {currentPlayer?.name}
+          <div className="font-bold mb-1" style={{ color: 'var(--color-primary)', fontSize: fonts.name }}>
+            {gameState.currentThrowerName || currentPlayer?.name}
           </div>
+          {gameState.currentThrowerName && currentPlayer?.name && gameState.currentThrowerName !== currentPlayer.name && (
+            <div className="font-semibold mb-2" style={{ color: 'var(--color-text-secondary)', fontSize: Math.max(12, Math.round(fonts.name * 0.6)) }}>
+              {currentPlayer.name}
+            </div>
+          )}
           <div className="font-score font-bold mb-1" style={{ color: 'var(--color-text)', fontSize: fonts.score }}>
             {inputScore || '0'}
           </div>

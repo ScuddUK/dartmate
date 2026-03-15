@@ -3,11 +3,12 @@ import React from 'react';
 interface MobilePostMatchProps {
   winnerName: string;
   winnerAverage: number;
+  primaryActionLabel?: string;
   onRestart: () => void;
   onChangeSettings: () => void;
 }
 
-export const MobilePostMatch: React.FC<MobilePostMatchProps> = ({ winnerName, winnerAverage, onRestart, onChangeSettings }) => {
+export const MobilePostMatch: React.FC<MobilePostMatchProps> = ({ winnerName, winnerAverage, primaryActionLabel, onRestart, onChangeSettings }) => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text)' }}>
       <div className="text-center mb-6">
@@ -22,7 +23,7 @@ export const MobilePostMatch: React.FC<MobilePostMatchProps> = ({ winnerName, wi
           className="w-full rounded-lg py-3 font-semibold"
           style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-background)' }}
         >
-          🎯 Start Again
+          🎯 {primaryActionLabel || 'Start Again'}
         </button>
         <button
           onClick={onChangeSettings}
