@@ -4,6 +4,7 @@
   },
   "build": {
     "preview": {
+      "node": "20.19.4",
       "android": {
         "buildType": "apk"
       },
@@ -13,6 +14,7 @@
       "channel": "preview"
     },
     "production": {
+      "node": "20.19.4",
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
