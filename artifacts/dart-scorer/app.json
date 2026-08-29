@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "DartMate",
+    "slug": "dart-scorer",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/images/icon.png",
+    "scheme": "dart-scorer",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121E12"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "icon": "./assets/images/icon.png"
+    },
+    "android": {
+      "package": "com.scudd.dartscorer",
+      "icon": "./assets/images/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#121E12"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1e0e940c-bbec-4e63-a221-7f039f498b90"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1e0e940c-bbec-4e63-a221-7f039f498b90"
+    }
+  }
+}
