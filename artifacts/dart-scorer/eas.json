@@ -4,9 +4,9 @@
   },
   "build": {
     "preview": {
-      "image": "sdk-54",
       "node": "20.19.4",
       "android": {
+        "image": "sdk-54",
         "buildType": "apk"
       },
       "env": {
@@ -15,10 +15,10 @@
       "channel": "preview"
     },
     "production": {
-      "image": "sdk-54",
       "node": "20.19.4",
       "autoIncrement": true,
       "android": {
+        "image": "sdk-54",
         "buildType": "app-bundle"
       },
       "env": {
