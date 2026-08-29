@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AppState,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +17,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  gameFingerprint,
+  isDartSyncState,
+  parseReconnectSession,
+  parseStoredGame,
+  revisionOf,
+  shouldAcceptResume,
+  type StoredGameSnapshot,
+} from "../../lib/game-recovery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,13 +61,32 @@ interface LegResult {
   matchOver: boolean;
 }
 
+interface TurnHistoryEntry {
+  idx: 0 | 1;
+  ts: number;
+}
+
 interface SyncState {
   options: GameOptions;
   players: [PlayerState, PlayerState];
   currentIdx: 0 | 1;
   legResult: LegResult | null;
   targetWins: number;
+  revision?: number;
+  updatedAt?: number;
+  turnHistory?: TurnHistoryEntry[];
 }
+
+function isSyncState(value: unknown): value is SyncState {
+  return isDartSyncState(value);
+}
+
+type PersistedGameSnapshot = StoredGameSnapshot<
+  GameOptions,
+  PlayerState,
+  LegResult,
+  TurnHistoryEntry
+>;
 
 type WsPairStatus = "idle" | "connecting" | "waiting" | "paired" | "error";
 
@@ -70,6 +99,12 @@ const DEFAULT_OPTIONS: GameOptions = {
   numLegs: 3,
   winRule: "first_to",
 };
+
+const ACTIVE_GAME_STORAGE_KEY = "dartmate_active_game_v1";
+const LAST_SESSION_STORAGE_KEY = "dartmate_last_session";
+const MOBILE_SCOREBOARD_SESSION_STORAGE_KEY =
+  "dartmate_mobile_scoreboard_session";
+
 
 const C = {
   bg: "#121E12",
@@ -984,7 +1019,7 @@ export default function DartScorer() {
   ]);
   const [currentIdx, setCurrentIdx] = useState<0 | 1>(0);
   const [input, setInput] = useState("");
-  const [turnHistory, setTurnHistory] = useState<{ idx: 0 | 1; ts: number }[]>([]);
+  const [turnHistory, setTurnHistory] = useState<TurnHistoryEntry[]>([]);
   const [bust, setBust] = useState(false);
   const [legResult, setLegResult] = useState<LegResult | null>(null);
   const [showOptions, setShowOptions] = useState(false);
@@ -999,32 +1034,136 @@ export default function DartScorer() {
   const [showRemote, setShowRemote] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<SyncState | null>(null);
   const [wsError, setWsError] = useState<string | null>(null);
+  const [gameHydrated, setGameHydrated] = useState(false);
+  const [wsReadyToSync, setWsReadyToSync] = useState(false);
+  const gameRevisionRef = useRef(0);
+  const gameUpdatedAtRef = useRef(0);
+  const gameFingerprintRef = useRef<string | null>(null);
+  const hasDurableGameRef = useRef(false);
+  const remoteRevisionRef = useRef(0);
+  const wsReadyToSyncRef = useRef(false);
 
-  // ── Scorer auto-reconnect ──────────────────────────────────────────────────
+  // ── WebSocket auto-reconnect ───────────────────────────────────────────────
   const lastScorerUrlRef = useRef<string | null>(null);
   const lastScorerCodeRef = useRef<string | null>(null);
+  const lastScorerTokenRef = useRef<string | null>(null);
+  const lastScoreboardUrlRef = useRef<string | null>(null);
+  const lastScoreboardCodeRef = useRef<string | null>(null);
+  const lastScoreboardTokenRef = useRef<string | null>(null);
   const manualDisconnectRef = useRef(false);
+  const mountedRef = useRef(true);
+  const connectionGenerationRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectBackoffRef = useRef(1000);
+  const appStateRef = useRef(AppState.currentState);
 
   // ── Rejoin last game ──────────────────────────────────────────────────────
-  const [rejoinInfo, setRejoinInfo] = useState<{ code: string; url: string } | null>(null);
+  const [rejoinInfo, setRejoinInfo] = useState<{
+    code: string;
+    url: string;
+    token: string;
+  } | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem("dartmate_last_session").then((raw) => {
-      if (!raw) return;
-      try {
-        const { code, url, ts } = JSON.parse(raw) as { code: string; url: string; ts: number };
-        if (Date.now() - ts < 10 * 60 * 1000) {
-          setRejoinInfo({ code, url });
-        } else {
-          AsyncStorage.removeItem("dartmate_last_session");
-        }
-      } catch {
-        AsyncStorage.removeItem("dartmate_last_session");
+    let cancelled = false;
+
+    Promise.all([
+      AsyncStorage.getItem(ACTIVE_GAME_STORAGE_KEY),
+      AsyncStorage.getItem(LAST_SESSION_STORAGE_KEY),
+      AsyncStorage.getItem(MOBILE_SCOREBOARD_SESSION_STORAGE_KEY),
+    ]).then(([gameRaw, sessionRaw, scoreboardSessionRaw]) => {
+      if (cancelled) return;
+
+      const savedGame = parseStoredGame<
+        GameOptions,
+        PlayerState,
+        LegResult,
+        TurnHistoryEntry
+      >(gameRaw);
+      if (savedGame) {
+        const restoredCore = {
+          options: savedGame.options,
+          players: savedGame.players,
+          currentIdx: savedGame.currentIdx,
+          legResult: savedGame.legResult,
+          turnHistory: savedGame.turnHistory,
+        };
+        gameRevisionRef.current = savedGame.revision;
+        gameUpdatedAtRef.current = savedGame.updatedAt;
+        gameFingerprintRef.current = gameFingerprint(restoredCore);
+        hasDurableGameRef.current = true;
+        setOptions(savedGame.options);
+        setPlayers(savedGame.players);
+        setCurrentIdx(savedGame.currentIdx);
+        setLegResult(savedGame.legResult);
+        setTurnHistory(savedGame.turnHistory);
+      } else {
+        const initialCore = {
+          options: DEFAULT_OPTIONS,
+          players: [
+            makePlayer(DEFAULT_OPTIONS.player1Name, DEFAULT_OPTIONS.startScore),
+            makePlayer(DEFAULT_OPTIONS.player2Name, DEFAULT_OPTIONS.startScore),
+          ] as [PlayerState, PlayerState],
+          currentIdx: 0 as const,
+          legResult: null,
+          turnHistory: [] as TurnHistoryEntry[],
+        };
+        gameFingerprintRef.current = gameFingerprint(initialCore);
+        if (gameRaw) AsyncStorage.removeItem(ACTIVE_GAME_STORAGE_KEY);
       }
+      setGameHydrated(true);
+
+      let hasRecentScorerSession = false;
+      const scorerSession = parseReconnectSession(sessionRaw);
+      if (scorerSession) {
+        hasRecentScorerSession = true;
+        setRejoinInfo(scorerSession);
+      } else if (sessionRaw) {
+        AsyncStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+      }
+
+      const scoreboardSession = parseReconnectSession(scoreboardSessionRaw);
+      if (!hasRecentScorerSession && scoreboardSession) {
+        initScoreboard(
+          scoreboardSession.url,
+          scoreboardSession.code,
+          scoreboardSession.token,
+        );
+      } else if (scoreboardSessionRaw && !scoreboardSession) {
+        AsyncStorage.removeItem(MOBILE_SCOREBOARD_SESSION_STORAGE_KEY);
+      }
+    }).catch((err) => {
+      console.warn("Could not restore DartMate game", err);
+      if (!cancelled) setGameHydrated(true);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!gameHydrated) return;
+    const core = { options, players, currentIdx, legResult, turnHistory };
+    const fingerprint = gameFingerprint(core);
+    if (fingerprint === gameFingerprintRef.current) return;
+
+    gameFingerprintRef.current = fingerprint;
+    gameRevisionRef.current += 1;
+    gameUpdatedAtRef.current = Date.now();
+    hasDurableGameRef.current = true;
+
+    const snapshot: PersistedGameSnapshot = {
+      version: 1,
+      ...core,
+      targetWins: getTargetWins(options),
+      revision: gameRevisionRef.current,
+      updatedAt: gameUpdatedAtRef.current,
+    };
+    AsyncStorage.setItem(ACTIVE_GAME_STORAGE_KEY, JSON.stringify(snapshot)).catch((err) => {
+      console.warn("Could not save DartMate game", err);
+    });
+  }, [currentIdx, gameHydrated, legResult, options, players, turnHistory]);
 
   const targetWins = getTargetWins(options);
 
@@ -1040,89 +1179,225 @@ export default function DartScorer() {
     if (ws?.readyState === 1) ws.send(JSON.stringify(data));
   }
 
+  function updateWsReadyToSync(ready: boolean) {
+    wsReadyToSyncRef.current = ready;
+    setWsReadyToSync(ready);
+  }
+
+  function acceptRemoteState(gs: SyncState) {
+    const incomingRevision = revisionOf(gs);
+    if (incomingRevision < remoteRevisionRef.current) return;
+    remoteRevisionRef.current = incomingRevision;
+    setRemoteGameState(gs);
+  }
+
+  function acceptScorerResume(gs: SyncState) {
+    const incomingRevision = revisionOf(gs);
+    const shouldRestore = shouldAcceptResume(
+      gameRevisionRef.current,
+      hasDurableGameRef.current,
+      gs,
+    );
+    if (!shouldRestore) return;
+
+    const restoredTurnHistory = Array.isArray(gs.turnHistory) ? gs.turnHistory : [];
+    const restoredCore = {
+      options: gs.options,
+      players: gs.players,
+      currentIdx: gs.currentIdx,
+      legResult: gs.legResult,
+      turnHistory: restoredTurnHistory,
+    };
+    gameRevisionRef.current = incomingRevision;
+    gameUpdatedAtRef.current =
+      typeof gs.updatedAt === "number" && Number.isFinite(gs.updatedAt)
+        ? gs.updatedAt
+        : Date.now();
+    gameFingerprintRef.current = gameFingerprint(restoredCore);
+    hasDurableGameRef.current = true;
+    setOptions(gs.options);
+    setPlayers(gs.players);
+    setCurrentIdx(gs.currentIdx);
+    setLegResult(gs.legResult);
+    setTurnHistory(restoredTurnHistory);
+    setInput("");
+    setBust(false);
+
+    const snapshot: PersistedGameSnapshot = {
+      version: 1,
+      ...restoredCore,
+      targetWins: gs.targetWins,
+      revision: gameRevisionRef.current,
+      updatedAt: gameUpdatedAtRef.current,
+    };
+    AsyncStorage.setItem(ACTIVE_GAME_STORAGE_KEY, JSON.stringify(snapshot)).catch((err) => {
+      console.warn("Could not save recovered DartMate game", err);
+    });
+  }
+
+  function rememberScorerReconnectToken(value: unknown) {
+    if (
+      wsRoleRef.current !== "scorer" ||
+      typeof value !== "string" ||
+      !lastScorerCodeRef.current ||
+      !lastScorerUrlRef.current
+    ) {
+      return;
+    }
+    lastScorerTokenRef.current = value;
+    AsyncStorage.setItem(
+      LAST_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        code: lastScorerCodeRef.current,
+        url: lastScorerUrlRef.current,
+        token: value,
+        ts: Date.now(),
+      }),
+    ).catch((err) => {
+      console.warn("Could not save DartMate session", err);
+    });
+  }
+
   function handleWsMsg(msg: Record<string, unknown>) {
     const t = msg.type as string;
     if (t === "code") {
-      setPairingCode(msg.code as string);
+      const code = msg.code as string;
+      setPairingCode(code);
+      if (wsRoleRef.current === "scoreboard") {
+        const reconnectToken = msg.reconnectToken;
+        if (typeof reconnectToken !== "string" || !lastScoreboardUrlRef.current) {
+          setWsError("Server did not provide a reconnect token");
+          setWsPairStatus("error");
+          return;
+        }
+        lastScoreboardCodeRef.current = code;
+        lastScoreboardTokenRef.current = reconnectToken;
+        AsyncStorage.setItem(
+          MOBILE_SCOREBOARD_SESSION_STORAGE_KEY,
+          JSON.stringify({
+            code,
+            url: lastScoreboardUrlRef.current,
+            token: reconnectToken,
+            ts: Date.now(),
+          }),
+        ).catch((err) => {
+          console.warn("Could not save mobile scoreboard session", err);
+        });
+      }
       setWsPairStatus("waiting");
     } else if (t === "paired") {
+      rememberScorerReconnectToken(msg.reconnectToken);
       setWsPairStatus("paired");
+      updateWsReadyToSync(true);
       setShowRemote(false);
       setRejoinInfo(null);
-      // If we're the scorer, save session info to AsyncStorage so the
-      // "Rejoin last game" prompt can appear if the app restarts within 10 min
+      // If we're the scorer, retain the reconnect capability until the relay
+      // confirms the session expired or the user explicitly unpairs.
       if (wsRoleRef.current === "scorer" && lastScorerCodeRef.current && lastScorerUrlRef.current) {
         AsyncStorage.setItem(
-          "dartmate_last_session",
+          LAST_SESSION_STORAGE_KEY,
           JSON.stringify({
             code: lastScorerCodeRef.current,
             url: lastScorerUrlRef.current,
+            token: lastScorerTokenRef.current,
             ts: Date.now(),
           }),
         );
       }
-      // NOTE: Do NOT beam state here — the sync useEffect fires automatically
-      // when wsPairStatus changes to "paired", and the server will send a
-      // "resume" message if there is cached state from a previous connection.
+      // The server sends any cached resume before paired, so enabling sync here
+      // cannot publish defaults over a recoverable game.
+    } else if (t === "joined") {
+      rememberScorerReconnectToken(msg.reconnectToken);
+    } else if (t === "waiting_for_scoreboard") {
+      rememberScorerReconnectToken(msg.reconnectToken);
+      updateWsReadyToSync(false);
+      setWsPairStatus("waiting");
     } else if (t === "resume") {
-      // Server is replaying cached game state — this happens when the app
-      // reconnects after a drop. Overwrite local game state so the app
-      // resumes exactly where it left off.
-      const gs = msg.payload as SyncState;
-      setOptions(gs.options);
-      setPlayers(gs.players);
-      setCurrentIdx(gs.currentIdx);
-      setLegResult(gs.legResult);
-      // Don't touch input/bust — they're transient UI state
+      if (!isSyncState(msg.payload)) return;
+      const gs = msg.payload;
+      if (wsRoleRef.current === "scorer") {
+        acceptScorerResume(gs);
+      } else {
+        acceptRemoteState(gs);
+      }
     } else if (t === "state") {
-      setRemoteGameState(msg.payload as SyncState);
+      if (!isSyncState(msg.payload)) return;
+      acceptRemoteState(msg.payload);
     } else if (t === "peer_disconnected") {
+      updateWsReadyToSync(false);
       setWsPairStatus("waiting");
     } else if (t === "peer_reconnected") {
-      // Scoreboard came back online — we're still paired, no action needed
+      setWsPairStatus("paired");
+      updateWsReadyToSync(true);
     } else if (t === "unpaired") {
       doUnpairLocal();
+    } else if (t === "rejoin_error") {
+      if (wsRoleRef.current === "scoreboard") {
+        lastScoreboardCodeRef.current = null;
+        lastScoreboardTokenRef.current = null;
+        setPairingCode(null);
+        updateWsReadyToSync(false);
+        setWsPairStatus("waiting");
+        AsyncStorage.removeItem(MOBILE_SCOREBOARD_SESSION_STORAGE_KEY);
+        wsSend({ type: "generate_code" });
+      } else {
+        manualDisconnectRef.current = true;
+        lastScorerCodeRef.current = null;
+        lastScorerTokenRef.current = null;
+        setRejoinInfo(null);
+        setWsError("Previous session expired. Enter the scoreboard code again.");
+        setWsPairStatus("error");
+        AsyncStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+        wsRef.current?.close();
+      }
     } else if (t === "error") {
-      setWsError((msg.message as string) ?? "Connection error");
+      const message = (msg.message as string) ?? "Connection error";
+      setWsError(message);
       setWsPairStatus("error");
+      manualDisconnectRef.current = true;
+      wsRef.current?.close();
     }
   }
 
   function openAndInit(url: string, onOpen: (ws: WebSocket) => void) {
     try {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      const previous = wsRef.current;
+      const generation = connectionGenerationRef.current + 1;
+      connectionGenerationRef.current = generation;
       const ws = new WebSocket(url);
       wsRef.current = ws;
+      if (previous && previous !== ws && previous.readyState < 2) previous.close();
+      updateWsReadyToSync(false);
       setWsPairStatus("connecting");
       setWsError(null);
+      const isCurrent = () =>
+        mountedRef.current &&
+        connectionGenerationRef.current === generation &&
+        wsRef.current === ws;
       ws.onopen = () => {
+        if (!isCurrent()) return;
         reconnectBackoffRef.current = 1000;
         onOpen(ws);
       };
       ws.onmessage = (e: MessageEvent<string>) => {
+        if (!isCurrent()) return;
         try { handleWsMsg(JSON.parse(e.data) as Record<string, unknown>); } catch {}
       };
       ws.onerror = () => {
+        if (!isCurrent()) return;
         setWsPairStatus("error");
         setWsError("Could not connect to server");
+        ws.close();
       };
       ws.onclose = () => {
-        if (wsRef.current === ws) wsRef.current = null;
-        // Only the scorer auto-reconnects — it's the source of truth for
-        // game state, so resuming the same session re-pushes current
-        // scores/settings instead of leaving the scoreboard stale.
-        if (
-          wsRoleRef.current === "scorer" &&
-          !manualDisconnectRef.current &&
-          lastScorerUrlRef.current &&
-          lastScorerCodeRef.current
-        ) {
-          setWsPairStatus("connecting");
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (manualDisconnectRef.current) return;
-            reconnectBackoffRef.current = Math.min(reconnectBackoffRef.current * 1.5, 5000);
-            initScorer(lastScorerUrlRef.current!, lastScorerCodeRef.current!);
-          }, reconnectBackoffRef.current);
-        }
+        if (!isCurrent()) return;
+        wsRef.current = null;
+        updateWsReadyToSync(false);
+        scheduleReconnect();
       };
     } catch {
       setWsPairStatus("error");
@@ -1130,30 +1405,107 @@ export default function DartScorer() {
     }
   }
 
-  function initScoreboard(url: string) {
-    manualDisconnectRef.current = false;
-    wsRoleRef.current = "scoreboard";
-    setWsRole("scoreboard");
-    openAndInit(url, (ws) => ws.send(JSON.stringify({ type: "generate_code" })));
+  function scheduleReconnect(delayMs = reconnectBackoffRef.current) {
+    if (!mountedRef.current || manualDisconnectRef.current) return;
+    const role = wsRoleRef.current;
+    const canReconnectScorer =
+      role === "scorer" &&
+      lastScorerUrlRef.current &&
+      lastScorerCodeRef.current &&
+      lastScorerTokenRef.current;
+    const canReconnectScoreboard =
+      role === "scoreboard" &&
+      lastScoreboardUrlRef.current &&
+      lastScoreboardCodeRef.current &&
+      lastScoreboardTokenRef.current;
+    if (!canReconnectScorer && !canReconnectScoreboard) return;
+
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    setWsPairStatus("connecting");
+    reconnectTimeoutRef.current = setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+      if (!mountedRef.current || manualDisconnectRef.current || wsRef.current) return;
+      reconnectBackoffRef.current = Math.min(reconnectBackoffRef.current * 1.5, 5000);
+      if (
+        wsRoleRef.current === "scorer" &&
+        lastScorerUrlRef.current &&
+        lastScorerCodeRef.current &&
+        lastScorerTokenRef.current
+      ) {
+        initScorer(
+          lastScorerUrlRef.current,
+          lastScorerCodeRef.current,
+          lastScorerTokenRef.current,
+        );
+      } else if (
+        wsRoleRef.current === "scoreboard" &&
+        lastScoreboardUrlRef.current &&
+        lastScoreboardCodeRef.current &&
+        lastScoreboardTokenRef.current
+      ) {
+        initScoreboard(
+          lastScoreboardUrlRef.current,
+          lastScoreboardCodeRef.current,
+          lastScoreboardTokenRef.current,
+        );
+      }
+    }, delayMs);
   }
 
-  function initScorer(url: string, code: string) {
+  function initScoreboard(
+    url: string,
+    rejoinCode?: string,
+    reconnectToken?: string,
+  ) {
+    manualDisconnectRef.current = false;
+    lastScoreboardUrlRef.current = url;
+    if (rejoinCode) lastScoreboardCodeRef.current = rejoinCode;
+    if (reconnectToken) lastScoreboardTokenRef.current = reconnectToken;
+    wsRoleRef.current = "scoreboard";
+    setWsRole("scoreboard");
+    openAndInit(url, (ws) =>
+      ws.send(JSON.stringify(
+        rejoinCode && reconnectToken
+          ? {
+              type: "rejoin_scoreboard",
+              code: rejoinCode,
+              reconnectToken,
+            }
+          : { type: "generate_code" },
+      )),
+    );
+  }
+
+  function initScorer(url: string, code: string, reconnectToken?: string) {
     manualDisconnectRef.current = false;
     lastScorerUrlRef.current = url;
     lastScorerCodeRef.current = code;
+    if (reconnectToken) lastScorerTokenRef.current = reconnectToken;
     wsRoleRef.current = "scorer";
     setWsRole("scorer");
-    openAndInit(url, (ws) => ws.send(JSON.stringify({ type: "join", code })));
+    openAndInit(url, (ws) =>
+      ws.send(JSON.stringify({
+        type: "join",
+        code,
+        reconnectToken: reconnectToken ?? lastScorerTokenRef.current ?? undefined,
+      })),
+    );
   }
 
   function doUnpairLocal() {
     manualDisconnectRef.current = true;
+    connectionGenerationRef.current += 1;
+    updateWsReadyToSync(false);
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
     lastScorerUrlRef.current = null;
     lastScorerCodeRef.current = null;
+    lastScorerTokenRef.current = null;
+    lastScoreboardUrlRef.current = null;
+    lastScoreboardCodeRef.current = null;
+    lastScoreboardTokenRef.current = null;
     wsRoleRef.current = null;
     wsRef.current?.close();
     wsRef.current = null;
@@ -1161,21 +1513,62 @@ export default function DartScorer() {
     setWsPairStatus("idle");
     setPairingCode(null);
     setRemoteGameState(null);
+    remoteRevisionRef.current = 0;
     setWsError(null);
     setRejoinInfo(null);
-    AsyncStorage.removeItem("dartmate_last_session");
+    AsyncStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+    AsyncStorage.removeItem(MOBILE_SCOREBOARD_SESSION_STORAGE_KEY);
   }
 
   function rejoinLastGame() {
     if (!rejoinInfo) return;
     setRejoinInfo(null);
-    initScorer(rejoinInfo.url, rejoinInfo.code);
+    initScorer(rejoinInfo.url, rejoinInfo.code, rejoinInfo.token);
   }
 
   function handleUnpair() {
     wsSend({ type: "unpair" });
     doUnpairLocal();
   }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const wasBackgrounded = appStateRef.current !== "active";
+      appStateRef.current = nextState;
+      if (
+        nextState !== "active" ||
+        !wasBackgrounded ||
+        manualDisconnectRef.current ||
+        !wsRoleRef.current
+      ) {
+        return;
+      }
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      const current = wsRef.current;
+      if (current && current.readyState < 2) current.close();
+      setTimeout(() => {
+        if (mountedRef.current && !manualDisconnectRef.current && !wsRef.current) {
+          scheduleReconnect(0);
+        }
+      }, 150);
+    });
+
+    return () => {
+      mountedRef.current = false;
+      manualDisconnectRef.current = true;
+      connectionGenerationRef.current += 1;
+      subscription.remove();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, []);
 
   const handleDigit = useCallback(
     (d: string) => {
@@ -1356,13 +1749,39 @@ export default function DartScorer() {
 
   // ── Sync game state to paired scoreboard ──
   useEffect(() => {
-    if (wsRole === "scorer" && wsPairStatus === "paired") {
+    if (
+      gameHydrated &&
+      wsRole === "scorer" &&
+      wsPairStatus === "paired" &&
+      wsReadyToSync &&
+      wsReadyToSyncRef.current
+    ) {
       wsSend({
         type: "state",
-        payload: { options, players, currentIdx, legResult, targetWins },
+        payload: {
+          options,
+          players,
+          currentIdx,
+          legResult,
+          targetWins,
+          turnHistory,
+          revision: gameRevisionRef.current,
+          updatedAt: gameUpdatedAtRef.current,
+        },
       });
     }
-  }, [players, currentIdx, legResult, options, targetWins, wsRole, wsPairStatus]);
+  }, [
+    currentIdx,
+    gameHydrated,
+    legResult,
+    options,
+    players,
+    targetWins,
+    turnHistory,
+    wsPairStatus,
+    wsReadyToSync,
+    wsRole,
+  ]);
 
   const clearLabel = input.length > 0 ? "C" : "UNDO";
   const activePlayer = players[currentIdx];
