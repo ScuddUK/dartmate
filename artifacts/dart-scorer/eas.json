@@ -4,6 +4,7 @@
   },
   "build": {
     "preview": {
+      "image": "sdk-54",
       "node": "20.19.4",
       "android": {
         "buildType": "apk"
@@ -14,6 +15,7 @@
       "channel": "preview"
     },
     "production": {
+      "image": "sdk-54",
       "node": "20.19.4",
       "autoIncrement": true,
       "android": {
